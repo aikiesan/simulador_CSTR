@@ -73,3 +73,34 @@ export const STORE = (() => {
   const cap = (Math.PI * h * (3 * a * a + h * h)) / 6;
   return Math.PI * a * a * PLANT.freeboard + cap;      // m3
 })();
+
+// ── The same model in time ───────────────────────────────────────────────────
+// Chen & Hashimoto's equation is the steady state of a CSTR whose microbes grow by Contois kinetics,
+// mu = mu_m S / (K' X + S). Counting the biomass as the substrate it grew from (b = X / Y, kg VS / m3), K' X = K b and
+// the yield drops out, so the dynamic form needs no number the steady model does not already have:
+//   db/dt = mu b - D b        dS/dt = D (S0 - S) - mu b        mu = mu_m S / (K b + S)
+// S is the degradable VS left in the liquid, b the active biomass, D the dilution rate (feed per volume, 1/d), and
+// methane = B0 * mu b. At constant D = 1/HRT its steady state is steady() above, exactly: S / S0 = K / (HRT mu_m - 1 + K).
+export const B_FLOOR = 1e-4;   // kg VS / m3: a trace of biomass is always left on the walls, so a washed-out reactor can regrow
+
+// The reactor's contents at the steady state of a plant: what a running digester (or its inoculum) holds.
+export function contentsAt(plant) {
+  const s = steady(plant);
+  const S = s.share > 0 ? s.s0 * (1 - s.share) : s.s0;
+  return { S, b: Math.max(B_FLOOR, s.s0 - S) };
+}
+
+// One step of dtH hours at a temperature, with fed m3 of feed per m3 of reactor arriving during the step.
+// Returns the kg VS per m3 of reactor degraded in the step (methane = B0 times that) and mutates c = { S, b }.
+export function advance(c, { ts }, temperature, dtH, fed) {
+  const s0 = ts * FEED.vsOfTs * 1000;
+  const mu = Math.max(0, muMax(temperature)) * c.S / (kOf(s0) * c.b + c.S || 1);
+  const dt = dtH / 24;
+  const used = Math.min(c.S, mu * c.b * dt);
+  // The feed replaces its own volume of mixed liquid: substrate in, a share of everything out.
+  c.S += fed * (s0 - c.S) - used;
+  c.b += used - fed * c.b;
+  c.S = Math.max(0, c.S);
+  c.b = Math.max(B_FLOOR, c.b);
+  return used;
+}

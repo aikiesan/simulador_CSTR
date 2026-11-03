@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Gera as quatro versões e roda a auditoria de geometria: se ela falhar, nada é publicado.
+      # Gera a página (em português) e roda a auditoria de geometria: se ela falhar, nada é publicado.
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

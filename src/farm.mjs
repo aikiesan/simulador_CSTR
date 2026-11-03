@@ -364,6 +364,22 @@ heating();
 digestate();
 flare();
 A.settle(R, P);
+
+// Where each part's number sits on the drawing (viewBox units).
+const ANCHORS = {
+  tank: polar(RO, 112 * DEG, 30),
+  slurry: polar(30, AZIMUTH * DEG, LEVEL - 12),
+  mixer: [MAST_XY[0], MAST_XY[1], 30],
+  heat: polar(HEAT_R, CUT[0], HEAT_Z[2]),
+  roof: [0, 0, RIM_Z + OUTER.h - 6],
+  feed: [PIT[0], PIT[1], PIT_H],
+  gas: [TRAP[0], TRAP[1], 12],
+  chp: [CHP.x + CHP.w / 2, CHP.y + CHP.d / 2, CHP_Z + CHP_H],
+  flare: [FLARE[0], FLARE[1], FLARE_TOP - 10],
+  digestate: polar(100, OUT_T, 7),
+};
+export const anchors = Object.fromEntries(Object.entries(ANCHORS).map(([key, p]) => [key, k.iso(p, P).map((v) => +v.toFixed(1))]));
+export const size = [WIDTH, HEIGHT];
 R.items.sort((a, b) => a.key - b.key);
 // Exhaust and flame float above everything they rise from.
 const body = [...wrapItems("farm", R.items), `<g data-topic="chp"><g data-part="exhaust"></g></g>`, `<g data-topic="flare"><g data-part="flame"></g></g>`];
@@ -413,7 +429,8 @@ function farmLive(C, root, clock) {
   const PUMP_M3H = 10;   // feed pump rate
   const PULSES = 8;      // feeds a day
   const sim = { fill: 0.45, chp: false, flaring: 0, temp: DESIGN.temperature, heater: false, mixing: false, feeding: false, strat: 0.4, prop: 0, fan: 0, extra: 0 };
-  let plant = { ...DESIGN }, steadyNow = steady(plant), warmNow = steadyNow, gasRate = steadyNow.biogas / 24;
+  let plant = { ...DESIGN }, steadyNow = steady(plant), gasRate = steadyNow.biogas / 24;
+  const proc = contentsAt(DESIGN);
   const CHP_BIOGAS = 50 / (ENERGY.kwhPerM3 * ENERGY.electrical) / FEED.ch4InBiogas; // m3 biogas / h at 50 kWe
   const bubbles = Array.from({ length: 70 }, (_, i) => ({ face: i % 2, r: 3 + Math.random() * (C.RI - 6), z: C.Z0 + Math.random() * (C.LEVEL - C.Z0), s: 0.5 + Math.random() * 0.7, live: Math.random() < 0.5 }));
   const puffs = Array.from({ length: 10 }, (_, i) => ({ z: (i / 10) * 18, x: 0 }));
@@ -477,31 +494,45 @@ function farmLive(C, root, clock) {
     const pts = [[-2.2, 0], [-1.4, h * 0.5], [-0.3, h], [0.6, h * 0.62], [1.6, h * 0.35], [2.2, 0]].map(([dx, dz]) => iso([x + dx * 0.574, y - dx * 0.819, z + dz], P));
     parts.flame.innerHTML = '<path class="cstr-flame" d="' + pathOf(pts, true) + '" fill-opacity="' + (0.35 + 0.6 * f).toFixed(2) + '"/>';
   }
-  function tick(dt, dtH, wall, calm) {
-    // The process answers a change over hours, not at once (a real one takes weeks). It follows the slurry's own
-    // temperature, not the set point: the kinetics are read at the temperature the tank has reached.
-    warmNow = steady({ ...plant, temperature: sim.temp }, VOLUME);
-    gasRate += (warmNow.biogas / 24 - gasRate) * (1 - Math.exp(-dtH / 6));
-    // Feeding: eight pulses a day at the pump rate; the overflow lets the same volume out. "Feed now" adds one pulse.
-    const pulse = steadyNow.q / PULSES / PUMP_M3H;
-    sim.feeding = clock.hour % (24 / PULSES) < pulse || sim.extra > 0;
-    if (sim.extra > 0) sim.extra -= dtH;
+  // The feed pump's timer: hours it runs between t0 and t1, eight pulses a day, doubled while overfed; "feed now" adds one.
+  function pumpHours(t0, t1) {
+    const per = 24 / PULSES, len = steadyNow.q / PULSES / PUMP_M3H * (clock.overfeedUntil > t0 ? 2 : 1);
+    let run = onHours(t0, t1, per, Math.min(per, len));
+    if (sim.extra > 0) { const more = Math.max(0, Math.min(sim.extra, t1 - t0 - run)); run += more; sim.extra -= more; }
+    return run;
+  }
+  function tick(dt, dtH, wall, calm, visible) {
+    // The process, the gas store and the heating in substeps of at most 3 minutes.
+    const n = Math.max(1, Math.ceil(dtH / 0.05)), h = dtH / n;
+    let ch4 = 0, fed = 0, vs = 0, pumped = 0, burning = false;
+    const set = plant.temperature, s0 = plant.ts * FEED.vsOfTs * 1000;
+    for (let i = 0; i < n && dtH > 0; i++) {
+      const t0 = clock.hour - dtH + i * h;
+      const run = pumpHours(t0, t0 + h);
+      const f = (PUMP_M3H * run) / VOLUME;
+      // Heating: loops on below the set point, off above it; 520 m3 of slurry loses heat slowly to a 22 C day.
+      if (sim.temp < set - 0.3) sim.heater = true;
+      if (sim.temp > set + 0.3 || clock.heaterFail) sim.heater = false;
+      sim.temp += h * ((sim.heater ? 0.9 + 0.03 * Math.max(0, set - 37) : 0) - 0.03 * (sim.temp - 22));
+      const c = advance(proc, plant, sim.temp, h, f) * FEED.b0;
+      ch4 += c; fed += f; vs += f * s0; pumped += run;
+      // Gas: in from the slurry; the engine burns 50 kWe worth between 70 % and 30 % full; the flare takes what would overfill.
+      if (sim.fill > 0.7) sim.chp = true;
+      if (sim.fill < 0.3) sim.chp = false;
+      const made = (c / FEED.ch4InBiogas) * VOLUME;
+      const next = sim.fill + (made - (sim.chp ? CHP_BIOGAS * h : 0)) / STORE_M3;
+      if (next > 0.985) { burning = true; sim.fill = 0.985; } else sim.fill = clamp(next, 0, 1);
+    }
+    sim.step = { ch4, fed, vs, dtH };
+    if (dtH > 0) {
+      gasRate += ((ch4 / FEED.ch4InBiogas) * VOLUME / dtH - gasRate) * (1 - Math.exp(-dtH / 0.4));   // m3/h
+      sim.feeding = pumped > 0;
+      sim.flaring += ((burning ? 1 : 0) - sim.flaring) * (1 - Math.exp(-dt / 0.6));
+    }
     sim.mixing = clock.mixerMode === "on" || (clock.mixerMode === "auto" && clock.hour % 1 < 0.25);
     sim.strat = clamp(sim.strat + dtH * (sim.mixing ? -1.6 : 0.12), 0, 1);
-    // Gas: in from the slurry; the engine burns 50 kWe worth between 70 % and 30 % full; the flare takes what would overfill.
-    if (sim.fill > 0.7) sim.chp = true;
-    if (sim.fill < 0.3) sim.chp = false;
-    const net = gasRate - (sim.chp ? CHP_BIOGAS : 0);
-    const next = sim.fill + (net * dtH) / STORE_M3;
-    const burning = next > 0.985 && net > 0;
-    sim.fill = clamp(burning ? 0.985 : next, 0, 1);
-    sim.flaring += ((burning ? 1 : 0) - sim.flaring) * (1 - Math.exp(-dt / 0.6));
-    // Heating: loops on below the set point, off above it; 520 m3 of slurry loses heat slowly to a 22 C day.
-    const set = plant.temperature;
-    if (sim.temp < set - 0.3) sim.heater = true;
-    if (sim.temp > set + 0.3 || clock.heaterFail) sim.heater = false;
-    sim.temp += dtH * ((sim.heater ? 0.9 + 0.03 * Math.max(0, set - 37) : 0) - 0.03 * (sim.temp - 22));
     if (!calm) { sim.prop += sim.mixing ? dt * 2 * Math.PI * 2.2 : 0; sim.fan += sim.chp ? dt * 2 * Math.PI * 1.4 : 0; }
+    if (!visible) return;
     drawMembrane(sim.fill);
     drawProp(sim.prop);
     drawBubbles(dtH);
@@ -530,7 +561,7 @@ function farmLive(C, root, clock) {
     const gasH = gasRate, store = sim.fill * STORE_M3;
     switch (topic) {
       case "tank": return [[F.volume, n0(VOLUME) + " m³"], [F.hrt, n0(plant.hrt) + " d"], [F.temp, n1(sim.temp) + " °C"], [F.surface, fmt(surfacePerVolume(PLANT.radius, PLANT.level), 2) + " m²/m³"]];
-      case "slurry": return [[F.temp, n1(sim.temp) + " °C"], [F.olr, fmt(steadyNow.olr, 2) + " kg VS/m³·d"], [F.share, n0(warmNow.share * 100) + " %"], [F.layers, n0(sim.strat * 100) + " %"]];
+      case "slurry": return [[F.temp, n1(sim.temp) + " °C"], [F.left, fmt(proc.S, 1) + " kg/m³"], [F.biomass, fmt(proc.b, 1) + " kg/m³"], [F.olr, fmt(steadyNow.olr, 2) + " kg VS/m³·d"], [F.converted, n0((1 - proc.S / (plant.ts * FEED.vsOfTs * 1000)) * 100) + " %"], [F.layers, n0(sim.strat * 100) + " %"]];
       case "mixer": return [[F.state, onOff(sim.mixing)], [F.mode, U[clock.mixerMode]], [F.layers, n0(sim.strat * 100) + " %"]];
       case "heat": return [[F.state, clock.heaterFail ? F.failed : onOff(sim.heater)], [F.temp, n1(sim.temp) + " °C"], [F.set, n0(plant.temperature) + " °C"]];
       case "roof": return [[F.stored, n0(store) + " m³ · " + n0(sim.fill * 100) + " %"], [F.biogasIn, n1(gasH) + " m³/h"], [F.biogasOut, n1(sim.chp ? CHP_BIOGAS : 0) + " m³/h"]];
@@ -546,7 +577,8 @@ function farmLive(C, root, clock) {
     sim,
     facts,
     // Biogas per m3 of reactor per day and temperature: the two numbers both scales share.
-    now() { return { temp: sim.temp, gas: (gasRate * 24) / VOLUME }; },
+    now() { return { temp: sim.temp, gas: (gasRate * 24) / VOLUME, S: proc.S, b: proc.b, set: plant.temperature }; },
+    restart(start, fresh) { Object.assign(proc, start); if (fresh) gasRate = 0; },
     update(next) { plant = next; steadyNow = steady(plant, VOLUME); },
     feedNow() { sim.extra = steadyNow.q / PULSES / PUMP_M3H; },
     tick,
