@@ -27,9 +27,11 @@ export const DESIGN = { temperature: 37, hrt: 25, ts: 0.08 };
 export const muMax = (t) => 0.013 * t - 0.129;
 export const kOf = (s0) => 0.8 + 0.0016 * Math.exp(0.06 * s0);
 
-export function steady({ temperature, hrt, ts }) {
+// Steady state of a CSTR of any working volume (m3). The kinetics know no size: at one HRT, temperature and feed,
+// a 5 L bench reactor and the 520 m3 tank reach the same share of B0 and make the same methane per m3 of reactor.
+export function steady({ temperature, hrt, ts }, volume = VOLUME) {
   const s0 = ts * FEED.vsOfTs * 1000;                 // kg VS / m3
-  const q = VOLUME / hrt;                             // m3 / d
+  const q = volume / hrt;                             // m3 / d
   const mu = muMax(temperature);
   const kk = kOf(s0);
   const grow = hrt * mu - 1;
@@ -40,12 +42,26 @@ export function steady({ temperature, hrt, ts }) {
   return {
     s0, q, mu, k: kk, share,
     washoutHrt: mu > 0 ? 1 / mu : Infinity,
-    olr: vsLoad / VOLUME,                             // kg VS / m3 / d
+    olr: vsLoad / volume,                             // kg VS / m3 / d
     vsLoad, ch4, biogas,
+    ch4PerM3: ch4 / volume,                           // Nm3 CH4 / m3 reactor / d: the same at every scale
     kwe: (ch4 * ENERGY.kwhPerM3 * ENERGY.electrical) / 24,
     cows: (q * 1000 * ts) / (FEED.manurePerCow * FEED.manureTs), // feed TS mass / TS per cow
   };
 }
+
+// The bench reactor: a 5 L jacketed glass CSTR (inner diameter 180 mm, liquid 196.5 mm deep), fed by a peristaltic
+// pump on a timer, heated by water from a circulator through the jacket, its gas counted by a drum gas meter into a bag.
+export const LAB = {
+  radius: 0.09,       // m, inside of the glass
+  level: 0.1965,      // m, liquid depth held by the overflow side arm
+  pumpMlMin: 2,       // peristaltic feed pump, mL/min
+  pulses: 4,          // feeds a day on the timer
+  meterMl: 100,       // mL of gas per turn of the meter's needle
+  bagL: 10,           // L, gas sampling bag
+  tempTau: 1.2,       // h, how fast the jacket brings 5 L to the set point
+};
+export const LAB_VOLUME = Math.PI * LAB.radius ** 2 * LAB.level; // m3 of liquid, 5.0 L
 
 // Gas storage between the slurry and the inner membrane at full stroke: the freeboard cylinder plus the dome cap.
 export const STORE = (() => {
