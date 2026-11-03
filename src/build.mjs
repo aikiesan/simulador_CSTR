@@ -1,762 +1,232 @@
-// Fig: a farm CSTR on dairy manure, cut open: concrete tank, double-membrane gas roof, mixer, heating, feed and gas line.
+// The page: the farm tank (Fig 1) and the bench reactor (Fig 2) side by side on a wide screen, stacked on a phone,
+// both driven by one panel and one plant clock. Both figures are proved by the Anatomy audit.
 // node src/build.mjs [--light] [--pt] [--audit]  ->  site/cstr[-pt][-light].html (the Portuguese light page is also site/index.html)
-// Drawn with the Anatomy kit (github.com/wheresryan22/anatomy, MIT), vendored in vendor/anatomy; ANATOMY_DIR points elsewhere.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { k, A, HERE, kitScript, SHELL_SRC, MODEL_SRC, theme, lang, L, esc } from "./kit.mjs";
 import * as M from "./model.mjs";
+import * as farm from "./farm.mjs";
+import * as lab from "./lab.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, "..", "site");
-const ANATOMY = process.env.ANATOMY_DIR || resolve(HERE, "..", "vendor", "anatomy");
-const KIT_URL = pathToFileURL(join(ANATOMY, "kit", "iso-kit.mjs")).href;
-const k = await import(KIT_URL);
-const G = await import(pathToFileURL(join(ANATOMY, "kit", "lathe.mjs")).href);
-const { kitScript } = await import(pathToFileURL(join(ANATOMY, "scripts", "inline-kit.mjs")).href);
-const SHELL_SRC = readFileSync(join(HERE, "shell.mjs"), "utf8");
-const SH = await import("data:text/javascript," + encodeURIComponent(SHELL_SRC.replace("__KIT__", KIT_URL)));
-const MODEL_SRC = readFileSync(join(HERE, "model.mjs"), "utf8");
 
-const theme = process.argv.includes("--light") ? "light" : "dark";
-const lang = process.argv.includes("--pt") ? "pt" : "en";
-const L = lang === "pt" ? 1 : 0;
-
-// ── World: 1 unit = 10 cm ───────────────────────────────────────────────────
-const WIDTH = 720;
-const HEIGHT = 450;
-const AZIMUTH = 35;
-const ELEVATION = 30;
-const DEG = Math.PI / 180;
-
-const RI = M.PLANT.radius * 10;           // 60, inside of the wall
-const RO = RI + 5;                        // concrete 30 cm + insulation and cladding
-const INSUL = [RI + 3, RI + 4.6];
-const Z0 = 3;                             // floor slab top
-const WALL_TOP = Z0 + M.PLANT.wall * 10;  // 55
-const LEVEL = Z0 + M.PLANT.level * 10;    // 49
-const RAIL = [RI + 0.6, RI + 3.4, WALL_TOP, WALL_TOP + 2.5];
-const RIM_Z = RAIL[3];
-const OUTER = SH.capAt(RI + 1.5, RIM_Z, M.PLANT.roofRise * 10 - 2); // apex 81.5
-const MAST_TOP = 66;
-const INNER_A = RI + 0.5;
-const INNER_MIN = MAST_TOP + 1 - RIM_Z;   // rests on the mast hat when empty
-const INNER_MAX = OUTER.h - 3;
-
-// The cut faces the viewer: a 110° wedge centred on the camera azimuth.
-const CUT = [AZIMUTH - 55, AZIMUTH + 55].map((d) => d * DEG);
-const KEPT = [CUT[1], CUT[0] + 2 * Math.PI];
-const NEAR_L = [CUT[1], (AZIMUTH + 90) * DEG];
-const FAR = [(AZIMUTH + 90) * DEG, (AZIMUTH + 270) * DEG];
-const NEAR_R = [(AZIMUTH + 270) * DEG, CUT[0] + 2 * Math.PI];
-// The roof is cut wider than the tank, so the gas membrane shows from the front: only its back 160° stays.
-const ROOF = [(AZIMUTH + 100) * DEG, (AZIMUTH + 260) * DEG];
-
-const PLATE = { x: -96, y: -126, w: 210, d: 226, r: 10 };
-const PLATE_H = 10;
-const FOOT_H = 5;
-
-const P = k.fitProjection(
-  [...k.boxCorners(PLATE, -PLATE_H - FOOT_H, 0), [0, 0, OUTER.zr + OUTER.h + 2]],
-  WIDTH, HEIGHT, { pad: 28, azimuth: AZIMUTH, elevation: ELEVATION },
-);
-const V = G.viewOf(P);
-const at = (p) => k.iso(p, P);
-const S = (paths, style) => k.solidSvg(paths, style);
-const Ln = (d, style) => k.lineSvg(d, style);
-const D = (pts, style) => k.dotsSvg(pts, style);
-const polar = (r, t, z) => [r * Math.cos(t), r * Math.sin(t), z];
-const arc = (r, a0, a1, n) => Array.from({ length: n + 1 }, (_, i) => { const t = a0 + ((a1 - a0) * i) / n; return [r * Math.cos(t), r * Math.sin(t)]; });
-const arcRing = (r0, r1, a0, a1, n) => [...arc(r1, a0, a1, n), ...arc(r0, a1, a0, n)];
-const stepsFor = (a0, a1) => Math.max(4, Math.round(((a1 - a0) / DEG) / 4));
-const facing = (t) => Math.cos(t) * V[0] + Math.sin(t) * V[1];
-// A polygon on the vertical cut plane at angle t, from (r, z) pairs.
-const onCut = (t, rz) => k.pathOf(rz.map(([r, z]) => at(polar(r, t, z))), true);
-
-// ── Bench ───────────────────────────────────────────────────────────────────
-function bench() {
-  const out = [`<path class="iso-halo" d="${k.haloOf(PLATE, -PLATE_H - FOOT_H, PLATE_H, P)}"/>`];
-  const byDepth = (pts) => [...pts].sort((a, b) => k.depthOf([a[0], a[1], 0], P) - k.depthOf([b[0], b[1], 0], P));
-  for (const [x, y] of byDepth(k.corners(PLATE, 24))) {
-    out.push(S(k.cylinder(x, y, 8, -PLATE_H - FOOT_H, 1.6, P, 28), { tone: "lo" }));
-    out.push(S(k.cylinder(x, y, 6.2, -PLATE_H - FOOT_H + 1.6, FOOT_H - 1.6, P, 28), { tone: "mid" }));
-  }
-  out.push(S(k.slabOf(PLATE, -PLATE_H, PLATE_H, P, 8, 1.6), { tone: "lo", inner: Ln(k.sideSeam(PLATE, -4, P, 8), { tone: "faint" }) }));
-  out.push(Ln(k.planOutline(k.insetPlan(PLATE, 5), 0, P), { tone: "faint" }));
-  const screws = k.corners(PLATE, 10);
-  out.push(Ln(screws.map(([x, y]) => k.ring(x, y, 2.4, 0, P, 16)).join(""), { tone: "lo" }));
-  out.push(D(screws.map(([x, y]) => at([x, y, 0])), { size: 0.5 }));
-  // Ruler along the front-left edge: 1 m per major tick.
-  const strip = { x: PLATE.x + 40, y: PLATE.y + PLATE.d - 15, w: 100, d: 7, r: 1 };
-  out.push(S(k.slabOf(strip, 0, 0.6, P, 3), { tone: "lo", crease: "none" }));
-  const ticks = k.topTicks(strip.x + 4, strip.x + strip.w - 4, 2, 5, strip.y + 0.8, 0.6, [2, 3.6], P);
-  out.push(Ln(ticks.minor, { tone: "lo" }), Ln(ticks.major, { tone: "mid" }));
-  out.push(D([at([strip.x + 2, strip.y + 3.5, 0.6]), at([strip.x + strip.w - 2, strip.y + 3.5, 0.6])], { size: 0.45 }));
-  return out.join("");
+// The model is checked before anything is written: the page runs the same code.
+{
+  const a = M.steady(M.DESIGN), b = M.steady(M.DESIGN, M.LAB_VOLUME);
+  const near = (x, y, tol) => Math.abs(x - y) <= tol;
+  const checks = [
+    ["farm volume 520 m³", near(M.VOLUME, 520.3, 0.5)],
+    ["lab volume 5.0 L", near(M.LAB_VOLUME * 1000, 5, 0.01)],
+    ["same share of B₀ at both scales", near(a.share, b.share, 1e-12)],
+    ["same CH₄ per m³ of reactor at both scales", near(a.ch4PerM3, b.ch4PerM3, 1e-12)],
+    ["same organic load at both scales", near(a.olr, b.olr, 1e-12)],
+    ["washout at μm·HRT = 1", M.steady({ ...M.DESIGN, hrt: 1 / M.muMax(37) }).share === 0],
+  ];
+  const bad = checks.filter(([, ok]) => !ok);
+  if (bad.length) { console.error("model checks failed:", bad.map(([n]) => n).join("; ")); process.exit(1); }
 }
-
-// ── Tank ────────────────────────────────────────────────────────────────────
-function slab() {
-  return S(k.cylinder(0, 0, RO + 3, 0, Z0, P, 96, 0.8), { tone: "lo", inner: Ln(k.sideArc(0, 0, RO + 3, 1.2, P, 64), { tone: "faint" }) });
-}
-
-// A stretch of wall. Its visible outer face gets cladding ribs (fading toward the turn) and two sheet seams.
-function wall([a0, a1], { outer = false, ends = [] } = {}) {
-  const ring = arcRing(RI, RO, a0, a1, stepsFor(a0, a1));
-  let inner = "";
-  if (outer) {
-    const seams = [Z0 + 18, Z0 + 36].map((z) => k.onTop(arc(RO, a0, a1, stepsFor(a0, a1) * 2).filter((_, i, all) => facing(a0 + ((a1 - a0) * i) / (all.length - 1)) > 0), z, P)).join("");
-    const ribs = [];
-    for (let t = a0 + 1.5 * DEG; t < a1 - 0.5 * DEG; t += 3 * DEG) {
-      const f = facing(t);
-      if (f <= 0.02) continue;
-      ribs.push({ d: k.segment(polar(RO, t, Z0), polar(RO, t, WALL_TOP), P), alpha: G.fadeOf(f, [0.02, 0.45]) * 0.9 });
-    }
-    inner = k.fadedSvg(ribs, { tone: "faint" }) + Ln(seams, { tone: "faint" });
-  }
-  let faces = "";
-  for (const t of ends) {
-    faces += `<path class="cstr-insul" d="${onCut(t, [[INSUL[0], Z0], [INSUL[1], Z0], [INSUL[1], WALL_TOP], [INSUL[0], WALL_TOP]])}"/>`;
-    faces += Ln(k.segment(polar(INSUL[0], t, Z0), polar(INSUL[0], t, WALL_TOP), P) + k.segment(polar(INSUL[1], t, Z0), polar(INSUL[1], t, WALL_TOP), P), { tone: "lo" });
-  }
-  return S(k.extrude(ring, Z0, WALL_TOP - Z0, P, { convex: false }), { tone: "mid", inner }) + faces;
-}
-
-function rail([a0, a1]) {
-  const ring = arcRing(RAIL[0], RAIL[1], a0, a1, stepsFor(a0, a1));
-  const bolts = [];
-  for (let t = a0 + 3 * DEG; t < a1 - 1 * DEG; t += 6 * DEG) bolts.push(at(polar((RAIL[0] + RAIL[1]) / 2 + 0.6, t, RAIL[3])));
-  return S(k.extrude(ring, RAIL[2], RAIL[3] - RAIL[2], P, { convex: false }), { tone: "mid" }) + D(bolts, { size: 0.4, tone: "lo" });
-}
-
-// Slurry: the kept pie, its two section faces carrying the layers, the heating loops in section and the bubbles.
-const HEAT_Z = [Z0 + 9, Z0 + 17, Z0 + 25, Z0 + 33];
-const HEAT_R = RI - 3.2;
-function slurry() {
-  const ring = [[0, 0], ...arc(RI - 0.05, KEPT[0], KEPT[1], 64)];
-  const out = [S(k.extrude(ring, Z0, LEVEL - Z0, P, { convex: false }), { tone: "lo", crease: "lo", className: "cstr-slurry" })];
-  for (const t of CUT) {
-    out.push(`<path data-part="sediment" class="cstr-sediment" d="${onCut(t, [[0.3, Z0], [RI - 0.1, Z0], [RI - 0.1, Z0 + 6], [0.3, Z0 + 6]])}"/>`);
-    out.push(`<path data-part="scum" class="cstr-scum" d="${onCut(t, [[0.3, LEVEL - 4], [RI - 0.1, LEVEL - 4], [RI - 0.1, LEVEL], [0.3, LEVEL]])}"/>`);
-    // Heating loops on the inside of the wall, cut: a stainless pipe on a bracket.
-    for (const z of HEAT_Z) {
-      const circle = Array.from({ length: 16 }, (_, i) => [HEAT_R + 1.3 * Math.cos((i / 16) * 2 * Math.PI), z + 1.3 * Math.sin((i / 16) * 2 * Math.PI)]);
-      out.push(`<path data-part="heat" class="cstr-heat" d="${onCut(t, circle)}"/>`);
-      out.push(Ln(onCut(t, circle), { tone: "mid" }));
-      out.push(Ln(k.segment(polar(HEAT_R + 1.3, t, z), polar(RI, t, z), P), { tone: "lo" }));
-    }
-  }
-  // The circulation the mixer drives, on the surface: arcs that run toward lower angles while it turns.
-  const swirl = [18, 33, 48].map((r) => k.onTop(arc(r, KEPT[1] - 0.06, KEPT[0] + 0.06, 72), LEVEL + 0.05, P)).join("");
-  out.push(`<g data-part="swirl">${Ln(swirl, { tone: "lo", flow: true, free: true })}</g>`);
-  out.push(`<g data-part="bubbles"></g>`);
-  return out.join("");
-}
-
-// Central support mast with a hat, and the belts that carry the gas membrane when it is empty.
-function mast() {
-  const out = [];
-  out.push(S(k.cylinder(0, 0, 3.4, Z0, 2, P, 28), { tone: "mid" }));
-  out.push(S(k.cylinder(0, 0, 1.6, Z0 + 2, MAST_TOP - 1.4 - Z0 - 2, P, 20), { tone: "mid", crease: "none", inner: Ln(k.sideArc(0, 0, 1.6, LEVEL, P, 12), { tone: "faint" }) }));
-  out.push(S(k.cylinder(0, 0, 4.2, MAST_TOP - 1.4, 1.4, P, 32, 0.4), { tone: "mid" }));
-  const belts = [];
-  const ends = [];
-  for (let t = ROOF[0] + 8 * DEG; t < ROOF[1] - 4 * DEG; t += 24 * DEG) {
-    const a = polar(4, t, MAST_TOP), b = polar(RAIL[0] + 0.4, t, RIM_Z);
-    belts.push(k.segment(a, b, P));
-    ends.push(at(a), at(b));
-  }
-  out.push(Ln(belts.join(""), { tone: "lo" }), D(ends, { size: 0.45, tone: "lo" }));
-  return out.join("");
-}
-
-// ── Mixer: a submersible propeller mixer on a guide mast, hung from a bracket on the wall ────────────────
-const MIX_T = AZIMUTH * DEG + 45 * DEG;     // 80°, close to the left cut face
-const MAST_XY = [48 * Math.cos(MIX_T), 48 * Math.sin(MIX_T)];
-const MIX_DIR = G.unit3([Math.sin(MIX_T), -Math.cos(MIX_T), 0]); // pushes the slurry round, toward lower angles
-const RADIAL = G.unit3([Math.cos(MIX_T), Math.sin(MIX_T), 0]);
-const MIX_Z = Z0 + 17;
-const MOTOR_O = G.add3([MAST_XY[0], MAST_XY[1], MIX_Z], G.mul3(RADIAL, -3.6));
-const MOTOR = G.frameAlong(MOTOR_O, MIX_DIR);
-const HUB_S = 20.5;
-const BLADE_R = 8.2;
-const MIX_TOP = WALL_TOP - 1;
-const WALL_ANCHOR = polar(RI, MIX_T + 16 * DEG, MIX_TOP - 1);
-
-function mixer() {
-  const out = [];
-  // Guide mast: a square tube from a floor shoe to the bracket.
-  out.push(S(k.slabOf({ x: MAST_XY[0] - 2.4, y: MAST_XY[1] - 2.4, w: 4.8, d: 4.8, r: 0.6 }, Z0, 1.4, P, 2, 0.3), { tone: "mid" }));
-  out.push(S(k.slabOf({ x: MAST_XY[0] - 1.2, y: MAST_XY[1] - 1.2, w: 2.4, d: 2.4, r: 0.3 }, Z0 + 1.4, MIX_TOP - Z0 - 1.4, P, 2), { tone: "mid", crease: "none" }));
-  // Bracket arm from the mast top back to the wall.
-  const a = [MAST_XY[0], MAST_XY[1]], b = [WALL_ANCHOR[0], WALL_ANCHOR[1]];
-  const along = G.unit3([b[0] - a[0], b[1] - a[1], 0]);
-  const side = [-along[1] * 1.3, along[0] * 1.3];
-  const arm = [[a[0] + side[0], a[1] + side[1]], [b[0] + side[0], b[1] + side[1]], [b[0] - side[0], b[1] - side[1]], [a[0] - side[0], a[1] - side[1]]];
-  out.push(S(k.extrude(arm, MIX_TOP, 2, P), { tone: "mid" }));
-  out.push(D([at([a[0], a[1], MIX_TOP + 2])], { size: 0.5 }));
-  // Carriage on the mast, the motor can and its nose.
-  out.push(S(k.slabOf({ x: MAST_XY[0] - 2.2, y: MAST_XY[1] - 2.2, w: 4.4, d: 4.4, r: 0.6 }, MIX_Z - 4.5, 9, P, 2, 0.3), { tone: "mid" }));
-  const can = [[-1, 0], [-1, 3.4], [0, 4.1], [13, 4.1], [15, 3.7, 1], [17, 3.0, 1], [18.6, 2.0, 1], [19.6, 0.9, 1], [20, 0]];
-  out.push(S(G.lathe(can, MOTOR, P, { steps: 40 }), { tone: "hi", inner: Ln(G.arcOf(MOTOR, 3, 4.1, P) + G.arcOf(MOTOR, 11, 4.1, P), { tone: "faint" }) }));
-  out.push(k.fadedSvg(G.ribsOf(MOTOR, 4, 10, 4.1, 18, P, { fade: [0.04, 0.42], seams: true }), { tone: "faint" }));
-  out.push(S(G.disc(HUB_S - 1.4, HUB_S + 1.2, 1.5, MOTOR, P), { tone: "mid" }));
-  out.push(`<g data-part="prop"></g>`);
-  // The flow it drives: two arcs of slurry leaving the propeller.
-  return out.join("");
-}
-
-// ── Membranes ───────────────────────────────────────────────────────────────
-const AXIS_DEPTH = G.dot3([0, 0, RIM_Z], V);
-const outerShell = SH.shellSvg(OUTER, ROOF[0], ROOF[1], P, { nTheta: 40, nRing: 8, under: "cstr-under" });
-
-// ── Exterior: every part is a recorded item, so its order and clearances are measured, not guessed ─────────
-const A = await import(pathToFileURL(join(ANATOMY, "kit", "audit.mjs")).href);
-const TB = await import(pathToFileURL(join(ANATOMY, "kit", "tube.mjs")).href);
-const R = A.recorder(P);
-const put = (name, ref, svg, shapes = [], { bias = 0, key } = {}) => {
-  const id = R.nameFor(name);
-  return R.put({ name: id, at: ref, bias, key, svg, shapes: shapes.map((shape) => R.solid({ ...shape, name: shape.name ?? id })) });
-};
-const dir2 = (t) => [Math.cos(t), Math.sin(t)];
-const ringBox = ([cx, cy], [ux, uy], len, wid) => {
-  const [vx, vy] = [-uy, ux];
-  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [cx + (ux * len * a) / 2 + (vx * wid * b) / 2, cy + (uy * len * a) / 2 + (vy * wid * b) / 2]);
-};
-function obox(name, c, u, len, wid, z, h, style = {}, { extra = "", bias = 0, owner } = {}) {
-  const ring = ringBox(c, u, len, wid);
-  put(name, [c[0], c[1], z + h / 2], S(k.extrude(ring, z, h, P, { bevel: style.bevel ?? 0.4 }), { tone: "mid", ...style }) + extra, [A.extruded(ring, z, h, { owner })], { bias });
-  return ring;
-}
-function box(name, plan, z, h, style = {}, { extra = "", bias = 0, steps = 3, owner } = {}) {
-  put(name, [plan.x + plan.w / 2, plan.y + plan.d / 2, z + h / 2], S(k.slabOf(plan, z, h, P, steps, style.bevel ?? 0.5), { tone: "mid", ...style }) + extra, [A.slab(plan, z, h, { owner }, steps)], { bias });
-}
-function cyl(name, cx, cy, r, z, h, style = {}, { extra = "", bias = 0, owner, steps = 32 } = {}) {
-  put(name, [cx, cy, z + h / 2], S(k.cylinder(cx, cy, r, z, h, P, steps, style.bevel ?? 0.4), { tone: "mid", ...style }) + extra, [A.cylinder(cx, cy, r, z, h, { owner })], { bias });
-}
-function turned(name, F, profile, style = {}, { extra = "", bias = 0, owner } = {}) {
-  const mid = (profile[0][0] + profile[profile.length - 1][0]) / 2;
-  put(name, G.add3(F.o, G.mul3(F.a, mid)), S(G.solidOf(profile, F, P), { tone: "mid", ...style }) + extra, [A.solid(F, profile, { owner })], { bias });
-}
-function flange(name, centre, axis, r, thick, { owner, tone = "mid", bolts = 6 } = {}) {
-  const F = G.frameAlong(centre, axis);
-  const face = G.dot3(F.a, V) > 0 ? thick / 2 : -thick / 2;
-  const dots = Math.abs(G.dot3(F.a, V)) > 0.15 && bolts ? D(G.dotsOf(F, face, r * 0.74, bolts, P, { all: true }), { size: 0.38 }) : "";
-  put(name, centre, S(G.disc(-thick / 2, thick / 2, r, F, P), { tone }) + dots, [A.disc(F, -thick / 2, thick / 2, r, { owner })]);
-}
-// A pipe with end flanges, filleted bends, and an optional valve on a straight leg (body, bonnet and handwheel).
-function pipe(name, control, r, { bend = 2.4, flanges = [true, true], flangeR = 1.7, tone = "hi", valve = null, side = [0, 0, 1] } = {}) {
-  const line = G.fillet(control, Math.max(r * bend, 2.4), 10, { P, tube: r });
-  const total = G.pathLength(line);
-  const collars = [];
-  [[0, -1], [total, 1]].forEach(([along, sign], index) => {
-    if (!flanges[index]) return;
-    const thick = Math.max(0.8, r * 0.5);
-    const tangent = G.tangentAlong(line, along);
-    const fr = [flangeR].flat()[Math.min(index, [flangeR].flat().length - 1)];
-    collars.push({ centre: G.add3(G.pointAlong(line, along), G.mul3(tangent, (-sign * thick) / 2)), tangent, radius: r * fr, thick, gap: sign < 0 ? [0, thick] : [total - thick, total] });
-  });
-  const gaps = collars.map((c) => c.gap);
-  let valveAt = null;
-  if (valve !== null) {
-    valveAt = valve * total;
-    gaps.push([valveAt - r * 2.2, valveAt + r * 2.2]);
-  }
-  const frOf = (index) => [flangeR].flat()[Math.min(index, [flangeR].flat().length - 1)];
-  R.route(name, line, r, { gaps, rims: flanges.map((f, index) => (f ? r * frOf(index) : r)) });
-  TB.tubePieces(line, r, P, { maxLength: 14, spacing: Math.max(0.8, Math.min(2.4, r * 0.4)), gaps }).forEach((part, index) =>
-    R.put({ name: `${name}:${index}`, at: part.mid, svg: TB.tubeSvg(part, { tone }) + `<g data-flow-of="${name}">${Ln(k.pathOf(part.points.map(at)), { tone: "hi", flow: true, free: true, className: "cstr-flow" })}</g>`, route: name, chunk: index, shapes: [A.tube(part.points, part.radii, { name, owner: name })] }));
-  collars.forEach((c, index) => flange(`${name}.flange${index}`, c.centre, c.tangent, c.radius, c.thick, { owner: name }));
-  if (valveAt !== null) {
-    const c = G.pointAlong(line, valveAt), tangent = G.tangentAlong(line, valveAt);
-    const F = G.frameAlong(c, tangent);
-    const len = r * 2.2;
-    turned(`${name}.valve`, F, [[-len, 0], [-len, r * 1.7], [-len + 0.7, r * 1.7], [-len + 0.7, r * 1.35], [-0.9, r * 1.35], [-0.6, r * 1.9], [0.6, r * 1.9], [0.9, r * 1.35], [len - 0.7, r * 1.35], [len - 0.7, r * 1.7], [len, r * 1.7], [len, 0]], { tone: "mid" }, { owner: name });
-    const up = G.unit3(side);
-    const NF = G.frameAlong(c, up);
-    const s0 = r * 1.9 - 0.3, s1 = s0 + r * 2.4;
-    turned(`${name}.bonnet`, NF, [[s0, 0], [s0, r * 0.9], [s1, r * 0.6], [s1, 0]], { tone: "mid" }, { owner: name });
-    const wheel = G.frameAlong(G.add3(c, G.mul3(up, s1)), up);
-    put(`${name}.wheel`, G.add3(c, G.mul3(up, s1 + 0.5)), S(G.disc(0, 0.9, r * 1.7, wheel, P), { tone: "mid" }) + Ln(G.ribsOf(wheel, 0, 0.9, r * 1.7, 24, P, { least: 0.15 }), { tone: "lo" }), [A.disc(wheel, 0, 0.9, r * 1.7, { owner: name })]);
-  }
-  return line;
-}
-
-// Feed: a round pre-pit with a top-entry agitator, an eccentric screw pump on a skid, and the inlet line to the tank.
-const PIT = [-62, 88], PIT_R = 14, PIT_H = 16;
-const IN_T = 112 * DEG, IN_Z = 24;
-const INLET = polar(RO, IN_T, IN_Z);
-const FOOT = polar(RO + 6.5, IN_T, 0);   // the riser stands radially outside the nozzle; the pump aims at it
-const FEED_U = (() => { const d = [FOOT[0] - PIT[0], FOOT[1] - PIT[1]]; const n = Math.hypot(...d); return [d[0] / n, d[1] / n]; })();
-const FEED_V = [-FEED_U[1], FEED_U[0]];
-const along = (s, side = 0) => [PIT[0] + FEED_U[0] * s + FEED_V[0] * side, PIT[1] + FEED_U[1] * s + FEED_V[1] * side];
-function feed() {
-  cyl("feed.pit", PIT[0], PIT[1], PIT_R, 0, PIT_H, { tone: "mid", bevel: 0.6 }, {
-    steps: 64,
-    extra: Ln(k.sideArc(PIT[0], PIT[1], PIT_R, 6, P, 40), { tone: "faint" })
-      + S(k.cylinder(PIT[0], PIT[1], PIT_R - 1.4, PIT_H, 0.01, P, 64), { tone: "lo", crease: "none", flat: true, className: "cstr-slurry" })
-      + Ln(k.ring(PIT[0], PIT[1], PIT_R - 1.4, PIT_H, P, 64), { tone: "lo" }),
-  });
-  box("feed.bridge", { x: PIT[0] - PIT_R - 0.6, y: PIT[1] - 2, w: 2 * PIT_R + 1.2, d: 4, r: 0.5 }, PIT_H, 1.6, { bevel: 0.3 });
-  cyl("feed.agitator", PIT[0], PIT[1], 2.6, PIT_H + 1.6, 5, { tone: "hi" }, { steps: 24, extra: Ln(k.knurl(PIT[0], PIT[1], 2.6, PIT_H + 2.4, PIT_H + 5.8, 16, P), { tone: "faint" }) });
-  cyl("feed.agitator-cap", PIT[0], PIT[1], 1.6, PIT_H + 6.6, 1.2, { tone: "mid" }, { steps: 20 });
-  // Pump: skid, motor, gearbox, suction housing, stator, discharge, all on the line from the pit to the inlet.
-  const SK = PIT_R + 11;
-  const skidC = along(SK);
-  obox("feed.skid", skidC, FEED_U, 22, 8, 0, 2, { tone: "lo" }, { extra: D(ringBox(skidC, FEED_U, 19, 5).map(([x, y]) => at([x, y, 2])), { size: 0.4 }) });
-  const PZ = 6.2;
-  const PF = G.frameAlong([skidC[0], skidC[1], PZ], [FEED_U[0], FEED_U[1], 0]);
-  turned("feed.motor", PF, [[-10, 0], [-10, 2.6], [-9.4, 3.2], [-5, 3.2], [-5, 0]], { tone: "hi" }, { extra: k.fadedSvg(G.ribsOf(PF, -9.2, -5.6, 3.2, 16, P, { fade: [0.04, 0.42], seams: true }), { tone: "faint" }) });
-  obox("feed.motor-foot", along(SK - 7.5), FEED_U, 4, 4.4, 2, PZ - 3.2 - 2, { tone: "lo", bevel: 0.2 });
-  obox("feed.gearbox", along(SK - 3.4), FEED_U, 3.2, 6, 2, 7.6, { tone: "mid" });
-  obox("feed.housing", along(SK + 0.2), FEED_U, 4, 6.4, 2, 7.6, { tone: "mid" });
-  turned("feed.stator", PF, [[2.2, 0], [2.2, 2.4], [8.4, 2.4], [8.4, 0]], { tone: "hi", inner: Ln(G.arcOf(PF, 4.4, 2.4, P) + G.arcOf(PF, 6.4, 2.4, P), { tone: "faint" }) });
-  turned("feed.discharge", PF, [[8.4, 0], [8.4, 2.9], [10, 2.9], [10, 0]], { tone: "mid" });
-  obox("feed.stand", along(SK + 9.2), FEED_U, 1.6, 4, 2, PZ - 2.9 - 2, { tone: "mid" });
-  // Suction: low out of the pit wall, across the ground, into the side of the suction housing.
-  const out = (() => { const d = [0.55 * FEED_U[0] + 0.83 * FEED_V[0], 0.55 * FEED_U[1] + 0.83 * FEED_V[1]]; const n = Math.hypot(...d); return [d[0] / n, d[1] / n]; })();
-  const SZ = 5.8;
-  pipe("feed.suction", [[PIT[0] + out[0] * PIT_R, PIT[1] + out[1] * PIT_R, SZ], [PIT[0] + out[0] * (PIT_R + 6), PIT[1] + out[1] * (PIT_R + 6), SZ], [...along(SK + 0.2, 9.5), SZ], [...along(SK + 0.2, 3.2), SZ]], 1.3, { flangeR: [1.3, 1.6], bend: 3.4 });
-  // Discharge: on along the axis, up beside the wall, through a gate valve into the tank below the slurry line.
-  const d0 = G.pointOf(PF, 10, 0, 0);
-  const foot = [FOOT[0], FOOT[1], PZ];
-  pipe("feed.inlet", [d0, foot, [foot[0], foot[1], IN_Z], INLET], 1.5, { valve: 0.55, side: [Math.cos(IN_T), Math.sin(IN_T), 0], bend: 2.6 });
-}
-
-// Ladder up the wall to the rail, fixed to the wall by three brackets.
-const LAD_T = 95.5 * DEG;
-function ladder() {
-  const rad = dir2(LAD_T);
-  const rungs = [];
-  const sides = [-2.4, 2.4].map((off) => [rad[0] * 69.6 - rad[1] * off, rad[1] * 69.6 + rad[0] * off]);
-  for (const [i, c] of sides.entries()) obox(`ladder.rail${i}`, c, rad, 1.4, 0.7, 0, RAIL[3] + 9, { tone: "mid", bevel: 0.2 });
-  for (let z = 4; z < RAIL[3] + 8; z += 3.2) rungs.push(k.segment([sides[0][0], sides[0][1], z], [sides[1][0], sides[1][1], z], P));
-  const rungShapes = [];
-  for (let z = 4; z < RAIL[3] + 8; z += 3.2) rungShapes.push(A.tube([[sides[0][0], sides[0][1], z], [sides[1][0], sides[1][1], z]], 0.35));
-  put("ladder.rungs", [rad[0] * 69.6, rad[1] * 69.6, 30], Ln(rungs.join(""), { tone: "mid" }), rungShapes, { bias: 0.05 });
-  for (const z of [14, 34, RAIL[2] - 2]) obox("ladder.bracket", [rad[0] * (RO + 2.1), rad[1] * (RO + 2.1)], rad, 4.2, 5.6, z, 1.2, { tone: "lo", bevel: 0.2 });
-}
-
-// Gas: offtake under the rail, a drop to the condensate trap, the line to the CHP; a hydraulic seal on the rail.
-const GAS_T = -42 * DEG;
-const CHP = { x: 2, y: -116, w: 54, d: 24, r: 0.8 };
-const CHP_Z = 2, CHP_H = 24;
-const TRAP = polar(RO + 8.5, GAS_T, 0);
-function gas() {
-  const trap = { x: TRAP[0] - 3.6, y: TRAP[1] - 3.6, w: 7.2, d: 7.2, r: 0.8 };
-  box("gas.trap", trap, 0, 9, { tone: "mid" }, { extra: Ln(k.sideSeam(trap, 3, P, 3), { tone: "faint" }) });
-  box("gas.trap-lid", k.insetPlan(trap, -0.4), 9, 1, { tone: "mid", bevel: 0.3 }, { extra: D(k.corners(trap, 1.2).map(([x, y]) => at([x, y, 10])), { size: 0.38 }) });
-  const out = polar(RO, GAS_T, WALL_TOP - 3);
-  pipe("gas.offtake", [out, polar(RO + 8.5, GAS_T, WALL_TOP - 3), [TRAP[0], TRAP[1], 10]], 1.6);
-  const inlet = [CHP.x + 46, CHP.y + CHP.d, CHP_Z + 5];
-  pipe("gas.line", [[TRAP[0], TRAP[1] - 3.6, 5], [TRAP[0], TRAP[1] - 14, 5], [inlet[0], TRAP[1] - 22, 5], [inlet[0], inlet[1] + 8, 5], [inlet[0], inlet[1], 5]], 1.4, { valve: 0.82, side: [1, 0, 0] });
-  // Over/underpressure safety: a water-sealed pot standing on the rail, with its vent hood.
-  const seal = polar((RAIL[0] + RAIL[1]) / 2, -50 * DEG, 0);
-  cyl("gas.seal", seal[0], seal[1], 1.3, RAIL[3], 7, { tone: "hi" }, { steps: 20, extra: Ln(k.sideArc(seal[0], seal[1], 1.3, RAIL[3] + 3, P, 12), { tone: "faint" }) });
-  cyl("gas.seal-hood", seal[0], seal[1], 1.9, RAIL[3] + 7, 1.2, { tone: "mid" }, { steps: 20 });
-}
-
-// CHP container: engine room with doors and louvres, dry cooler and exhaust silencer on the roof, a stack.
-function chp() {
-  box("chp.plinth", { x: CHP.x - 2, y: CHP.y - 2, w: CHP.w + 4, d: CHP.d + 4, r: 0.6 }, 0, CHP_Z, { tone: "lo" });
-  const yF = CHP.y + CHP.d, xF = CHP.x + CHP.w;
-  const ribs = [];
-  for (let x = CHP.x + 3; x < CHP.x + CHP.w - 2; x += 2.6) ribs.push(k.segment([x, yF, CHP_Z], [x, yF, CHP_Z + CHP_H], P));
-  const slot = (x0, x1, z) => k.pathOf([[x0, yF + 0.01, z], [x1, yF + 0.01, z], [x1, yF + 0.01, z + 1], [x0, yF + 0.01, z + 1]].map(at), true);
-  let louvres = "";
-  for (let z = CHP_Z + 13; z < CHP_Z + 21; z += 2) louvres += slot(CHP.x + 6, CHP.x + 18, z);
-  const door = (y0, y1) => k.pathOf([[xF + 0.01, y0, CHP_Z + 1], [xF + 0.01, y1, CHP_Z + 1], [xF + 0.01, y1, CHP_Z + 20], [xF + 0.01, y0, CHP_Z + 20]].map(at), true);
-  const lamp = at([xF, CHP.y + 12, CHP_Z + 21.6]);
-  box("chp.container", CHP, CHP_Z, CHP_H, { tone: "mid", bevel: 0.8 }, {
-    extra: Ln(ribs.join(""), { tone: "faint" }) + `<path class="cstr-louvre" d="${louvres}"/>` + Ln(louvres, { tone: "lo" })
-      + Ln(door(CHP.y + 2, CHP.y + 11) + door(CHP.y + 13, CHP.y + 22), { tone: "lo" })
-      + D([at([xF, CHP.y + 9.6, CHP_Z + 10]), at([xF, CHP.y + 14.4, CHP_Z + 10])], { size: 0.5, tone: "hi" })
-      + `<circle data-part="chp-lamp" class="cstr-lamp" cx="${lamp[0].toFixed(1)}" cy="${lamp[1].toFixed(1)}" r="1.2"/>`,
-    steps: 2,
-  });
-  // Dry cooler: a frame box with two fans on top.
-  const cooler = { x: CHP.x + 4, y: CHP.y + 4, w: 22, d: 14, r: 0.6 };
-  const top = CHP_Z + CHP_H + 6;
-  FANS.push(...[cooler.x + 6, cooler.x + 16].map((x) => [x, cooler.y + 7, top]));
-  box("chp.cooler", cooler, CHP_Z + CHP_H, 6, { tone: "mid", bevel: 0.4 }, {
-    extra: [cooler.x + 6, cooler.x + 16].map((x) => Ln(k.ring(x, cooler.y + 7, 4.4, top, P, 32) + k.ring(x, cooler.y + 7, 1.2, top, P, 12), { tone: "lo" })).join("")
-      + `<g data-part="fans"></g>`,
-  });
-  // Exhaust: a vertical silencer on the roof, the stack on top of it, a rain cap.
-  const stackX = CHP.x + 44, stackY = CHP.y + 12, roof = CHP_Z + CHP_H;
-  const SF = G.frameOf([stackX, stackY, roof], [0, 0, 1], [1, 0, 0], [0, 1, 0]);
-  turned("chp.silencer-base", SF, [[0, 0], [0, 4.2], [0.8, 4.2], [0.8, 0]], { tone: "mid" });
-  turned("chp.silencer", SF, [[0.8, 0], [0.8, 3.4], [13, 3.4], [15, 1.5], [24, 1.5], [24, 0]], { tone: "hi", inner: Ln(G.arcOf(SF, 4.5, 3.4, P) + G.arcOf(SF, 9.5, 3.4, P), { tone: "faint" }) });
-  STACK.push(stackX, stackY, roof + 25.6);
-  cyl("chp.cap", stackX, stackY, 2.4, roof + 24, 0.8, { tone: "mid" }, { steps: 20 });
-}
-const FANS = [];
-const STACK = [];
-
-// Heating: flow and return from the CHP's heat exchanger to the loops inside the wall.
-function heating() {
-  [[-53, 16, CHP.x + 20], [-49.5, 22, CHP.x + 25]].forEach(([deg, z, x], index) => {
-    const t = deg * DEG;
-    const wallAt = polar(RO, t, z);
-    const low = CHP_Z + 4 + index * 4;
-    const out = polar(RO + 7 + index * 3, t, low);
-    const across = [Math.sin(AZIMUTH * DEG), -Math.cos(AZIMUTH * DEG)];
-    const pre = [out[0] + across[0] * 9, out[1] + across[1] * 9, low];
-    pipe(`heat.${index ? "return" : "flow"}`, [[x, CHP.y + CHP.d, low], [x, CHP.y + CHP.d + 6 + index * 3, low], pre, [out[0], out[1], low], [out[0], out[1], z], wallAt], 1.1, { bend: 3.2 });
-  });
-}
-
-// Digestate: overflow box on the wall at the slurry line, a drop, and the pipe to a covered digestate pit.
-const OUT_T = -28 * DEG;
-function digestate() {
-  const rad = dir2(OUT_T);
-  obox("digestate.overflow", [rad[0] * (RO + 3.2), rad[1] * (RO + 3.2)], rad, 6.4, 7, LEVEL - 12, 13, { tone: "mid" });
-  const pit = [rad[0] * 100, rad[1] * 100];
-  obox("digestate.pit", pit, rad, 16, 20, 0, 7, { tone: "lo", bevel: 0.6 }, { extra: Ln(ringBox(pit, rad, 13, 17).map((p, i, all) => k.segment([...p, 7], [...all[(i + 1) % 4], 7], P)).join(""), { tone: "faint" }) });
-  pipe("digestate.drop", [polar(RO + 3.2, OUT_T, LEVEL - 12), polar(RO + 3.2, OUT_T, 4.2), polar(100 - 8, OUT_T, 4.2)], 1.8, { flangeR: 1.4 });
-}
-
-// Flare: the safety outlet when the gas holder is full. A base, a stack, the burner and its windshield.
-const FLARE = [94, -90];
-const FLARE_TOP = 52;
-function flare() {
-  const base = { x: FLARE[0] - 3.4, y: FLARE[1] - 3.4, w: 6.8, d: 6.8, r: 0.6 };
-  box("flare.base", base, 0, 8, { tone: "mid" }, { extra: D(k.corners(base, 1.1).map(([x, y]) => at([x, y, 8])), { size: 0.38 }) });
-  cyl("flare.stack", FLARE[0], FLARE[1], 1.5, 8, FLARE_TOP - 6 - 8, { tone: "hi" }, { steps: 20, extra: Ln(k.sideArc(FLARE[0], FLARE[1], 1.5, 20, P, 12) + k.sideArc(FLARE[0], FLARE[1], 1.5, 34, P, 12), { tone: "faint" }) });
-  cyl("flare.burner", FLARE[0], FLARE[1], 2.4, FLARE_TOP - 6, 2, { tone: "mid" }, { steps: 24 });
-  cyl("flare.shield", FLARE[0], FLARE[1], 3.2, FLARE_TOP - 4, 4, { tone: "mid", bevel: 0.3 }, { steps: 32, extra: Ln(k.ring(FLARE[0], FLARE[1], 2.6, FLARE_TOP, P, 32), { tone: "lo" }) });
-  const from = [TRAP[0] + 3.6, TRAP[1], 5];
-  pipe("gas.flare", [from, [FLARE[0] - 26, TRAP[1], 5], [FLARE[0] - 26, FLARE[1], 5], [FLARE[0] - 3.4, FLARE[1], 5]], 1.2, { valve: 0.3, side: [0, 0, 1] });
-}
-
-// ── Assembly ────────────────────────────────────────────────────────────────
-put("stand.plate", [0, 0, -PLATE_H / 2], bench(), [A.slab(PLATE, -PLATE_H, PLATE_H, {}, 8)], { key: -1e6 });
-const tankSvg = [
-  slab(),
-  wall(FAR), rail(FAR),
-  slurry(),
-  mast(),
-  mixer(),
-  `<g class="cstr-outer">${outerShell.far}${Ln(outerShell.edges, { tone: "mid" })}</g>`,
-  `<g data-part="inner" class="cstr-inner"></g>`,
-  `<g class="cstr-outer-cut">${Ln(outerShell.cuts, { tone: "hi" })}</g>`,
-  wall(NEAR_L, { outer: true, ends: [CUT[1]] }), rail(NEAR_L),
-  wall(NEAR_R, { outer: true, ends: [CUT[0] + 2 * Math.PI] }), rail(NEAR_R),
-].join("");
-const DOME_F = G.frameOf([0, 0, RIM_Z], [0, 0, 1], [1, 0, 0], [0, 1, 0]);
-const domeProfile = Array.from({ length: 9 }, (_, i) => { const s = (OUTER.h * i) / 8; return [s, i === 8 ? 0 : Math.sqrt(OUTER.rs ** 2 - (RIM_Z + s - OUTER.zc) ** 2)]; });
-put("tank", [0, 0, 30], tankSvg, [A.cylinder(0, 0, RO + 3, 0, Z0), A.cylinder(0, 0, RO, Z0, RAIL[3] - Z0), A.solid(DOME_F, [[0, 0], ...domeProfile])]);
-feed();
-ladder();
-gas();
-chp();
-heating();
-digestate();
-flare();
-A.settle(R, P);
-R.items.sort((a, b) => a.key - b.key);
-// Exhaust and flame float above everything they rise from.
-const body = [...R.items.map((item) => item.svg), `<g data-part="exhaust"></g>`, `<g data-part="flame"></g>`];
 
 const T = {
-  title: ["CSTR digester", "Biodigestor CSTR"],
-  hint: ["← → speed · M mixer", "← → velocidade · M agitador"],
-  label: [
-    "A farm biogas digester of the continuously stirred tank type, cut open. A round concrete tank, insulated and clad, holds 520 cubic metres of dairy-manure slurry under a double-membrane gas roof whose inner membrane rises and falls with the stored gas. A propeller mixer on a guide mast stirs the slurry; heating loops on the inside of the wall keep it warm; bubbles rise through the cut faces. A screw pump feeds it from a pit; an overflow sends digestate to a pit; the gas goes through a condensate trap to an engine container, with a flare for surplus gas.",
-    "Um biodigestor de mistura completa (CSTR) cortado ao meio. Um tanque redondo de concreto, isolado e revestido, guarda 520 metros cúbicos de chorume de gado leiteiro sob uma cobertura de dupla membrana, cuja membrana interna sobe e desce com o gás armazenado. Um agitador de hélice numa haste-guia mistura o chorume; serpentinas de aquecimento na face interna da parede mantêm a temperatura; bolhas sobem pelas faces do corte. Uma bomba helicoidal o alimenta a partir de um poço; um extravasor leva o digestato a uma caixa; o gás passa por um purgador de condensado até o contêiner do motor, com um flare para o excedente.",
+  title: ["CSTR digester at two scales", "Biodigestor CSTR em duas escalas"],
+  lede: [
+    "The same completely mixed digester, as a 520 m³ farm tank and as a 5 L bench reactor. One panel runs both on one plant clock: change the temperature, the retention time or the feed and watch both answer.",
+    "O mesmo biodigestor de mistura completa, como um tanque de 520 m³ na fazenda e como um reator de bancada de 5 L. Um só painel comanda os dois num mesmo relógio: mude a temperatura, o tempo de retenção ou a alimentação e veja os dois responderem.",
   ],
-  keys: [
-    [{ mark: "dashed", label: "Dashes: what is flowing right now" }, { mark: "raised", label: "Grey dome: the gas membrane, as full as the store" }],
-    [{ mark: "dashed", label: "Tracejado: o que está escoando agora" }, { mark: "raised", label: "Cúpula cinza: a membrana de gás, tão cheia quanto o estoque" }],
-  ],
-  caption: [
-    "A 520 m³ CSTR on dairy manure, sized from CP2b's dairy parameters (BMP 200 Nm³ CH₄/t VS, VS 78 % of TS) and run as a teaching model: Chen and Hashimoto's kinetics for a completely mixed reactor, with Hashimoto's K for dairy manure. Plant time runs about 10 minutes per second. A pump feeds the tank eight times a day and the overflow lets the same volume out; the mixer runs 15 minutes an hour, and with it off scum and sediment build up on the cut faces; the heating holds the set point; the 50 kW engine starts at 70 % gas and stops at 30 %, and the flare burns what the store cannot hold. The model has no acidification or ammonia inhibition: below an HRT that loads more than about 4 kg VS/m³·d, real digesters fail before they reach its numbers. Methane, not biogas, unless the panel says biogas (60 % CH₄).",
-    "Um CSTR de 520 m³ com esterco de gado leiteiro, dimensionado com os parâmetros de leite do CP2b (BMP 200 Nm³ CH₄/t SV, SV 78 % do ST) e operado como modelo didático: a cinética de Chen e Hashimoto para um reator de mistura completa, com o K de Hashimoto para esterco leiteiro. O tempo da planta corre cerca de 10 minutos por segundo. Uma bomba alimenta o tanque oito vezes por dia e o extravasor deixa sair o mesmo volume; o agitador roda 15 minutos por hora, e desligado deixa formar crosta e sedimento nas faces do corte; o aquecimento segura a temperatura; o motor de 50 kW liga com 70 % de gás e desliga com 30 %, e o flare queima o que o gasômetro não guarda. O modelo não tem acidificação nem inibição por amônia: abaixo do TRH que carrega mais de uns 4 kg SV/m³·d, um digestor real falha antes de chegar aos seus números. Metano, não biogás, salvo quando o painel diz biogás (60 % de CH₄).",
+  hint: ["← → speed · M mixer · F feed", "← → velocidade · M agitador · F alimentar"],
+  model: [
+    "Both run a teaching model: Chen and Hashimoto's kinetics for a completely mixed reactor, with Hashimoto's K for dairy manure and CP2b's dairy parameters (BMP 200 Nm³ CH₄/t VS, VS 78 % of TS). The kinetics know no size, so at one HRT both reach the same share of B₀; what scale changes is everything around them: how fast heat comes and goes, how the feed arrives, how the gas is measured. Plant time runs about 10 minutes per second. The model has no acidification or ammonia inhibition: below an HRT that loads more than about 4 kg VS/m³·d, real digesters fail before they reach its numbers.",
+    "Os dois rodam um modelo didático: a cinética de Chen e Hashimoto para um reator de mistura completa, com o K de Hashimoto para esterco leiteiro e os parâmetros de leite do CP2b (BMP 200 Nm³ CH₄/t SV, SV 78 % do ST). A cinética não conhece tamanho: no mesmo TRH os dois atingem a mesma fração do B₀; o que a escala muda é tudo à volta: a rapidez com que o calor entra e sai, como chega a alimentação, como se mede o gás. O tempo da planta corre cerca de 10 minutos por segundo. O modelo não tem acidificação nem inibição por amônia: abaixo do TRH que carrega mais de uns 4 kg SV/m³·d, um digestor real falha antes de chegar aos seus números.",
   ],
 };
 const t = (key) => T[key][L];
-const svg = k.figureSvg({ width: WIDTH, height: HEIGHT, label: t("label"), body });
 
-// ── Panel text ──────────────────────────────────────────────────────────────
+// ── Panel ───────────────────────────────────────────────────────────────────
 const U = [
   {
-    temperature: "Temperature", hrt: "Retention time (HRT)", ts: "Feed solids (TS)", mixer: "Mixer", speed: "Plant time",
+    temperature: "Temperature", hrt: "Retention time (HRT)", ts: "Feed solids (TS)", mixer: "Mixers", speed: "Plant time",
     auto: "auto, 15 min/h", on: "always on", off: "off", perSec: "min per second",
-    feed: "Feed", cows: "Dairy cows", olr: "Organic load", share: "Of B₀ reached", ch4: "Methane", biogas: "Biogas", kwe: "Electric", washout: "Washout below",
+    feedNow: "Feed now", emptyBag: "Empty the gas bag", controls: "Operation",
+    quantity: "", farm: "Farm · 520 m³", lab: "Lab · 5 L", both: "Both scales",
+    volume: "Working volume", feed: "Feed", olr: "Organic load", share: "Of B₀ reached", ch4: "Methane", biogas: "Biogas", perM3: "CH₄ per m³ of reactor",
+    power: "Electric equivalent", cows: "Dairy cows", turns: "Gas meter", washout: "Washout below", scale: "Volume ratio",
     warnOlr: "Organic load above 4 kg VS/m³·d: real digesters acidify here; this model cannot show it.",
     warnWash: "HRT at or below washout: the methanogens leave faster than they grow, and gas stops.",
-    chart: "Methane against retention time, at this temperature and feed", xAxis: "HRT (d)", yAxis: "CH₄ (Nm³/d)", zoneWash: "washout", zoneOlr: "OLR > 4", now: "now",
-    table: "Show as a table", day: "/d", d: "d",
+    chart: "Methane against retention time, at this temperature and feed: one curve, two scales", xAxis: "HRT (d)", yFarm: "farm, Nm³ CH₄/d", yLab: "bench, NL CH₄/d", zoneWash: "washout", zoneOlr: "OLR > 4", now: "now",
+    table: "Show as a table", turnsUnit: "turns/d", bagFull: "bag emptied for analysis",
   },
   {
-    temperature: "Temperatura", hrt: "Tempo de retenção (TRH)", ts: "Sólidos na alimentação (ST)", mixer: "Agitador", speed: "Tempo da planta",
+    temperature: "Temperatura", hrt: "Tempo de retenção (TRH)", ts: "Sólidos na alimentação (ST)", mixer: "Agitadores", speed: "Tempo da planta",
     auto: "automático, 15 min/h", on: "sempre ligado", off: "desligado", perSec: "min por segundo",
-    feed: "Alimentação", cows: "Vacas leiteiras", olr: "Carga orgânica", share: "Do B₀ atingido", ch4: "Metano", biogas: "Biogás", kwe: "Elétrica", washout: "Lavagem abaixo de",
+    feedNow: "Alimentar agora", emptyBag: "Esvaziar a bolsa de gás", controls: "Operação",
+    quantity: "", farm: "Fazenda · 520 m³", lab: "Bancada · 5 L", both: "As duas escalas",
+    volume: "Volume útil", feed: "Alimentação", olr: "Carga orgânica", share: "Do B₀ atingido", ch4: "Metano", biogas: "Biogás", perM3: "CH₄ por m³ de reator",
+    power: "Equivalente elétrico", cows: "Vacas leiteiras", turns: "Medidor de gás", washout: "Lavagem abaixo de", scale: "Razão de volumes",
     warnOlr: "Carga orgânica acima de 4 kg SV/m³·d: digestores reais acidificam aqui; este modelo não mostra isso.",
     warnWash: "TRH no limite de lavagem ou abaixo: as metanogênicas saem mais rápido do que crescem, e o gás para.",
-    chart: "Metano em função do tempo de retenção, nesta temperatura e alimentação", xAxis: "TRH (d)", yAxis: "CH₄ (Nm³/d)", zoneWash: "lavagem", zoneOlr: "COV > 4", now: "agora",
-    table: "Ver como tabela", day: "/d", d: "d",
+    chart: "Metano em função do tempo de retenção, nesta temperatura e alimentação: uma curva, duas escalas", xAxis: "TRH (d)", yFarm: "fazenda, Nm³ CH₄/d", yLab: "bancada, NL CH₄/d", zoneWash: "lavagem", zoneOlr: "COV > 4", now: "agora",
+    table: "Ver como tabela", turnsUnit: "voltas/d", bagFull: "bolsa esvaziada para análise",
   },
 ][L];
-const esc = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-const slider = (key, min, max, step, value, unit) => `<label class="cstr-ctl"><span>${esc(U[key])} <output data-out="${key}">${value}${unit}</output></span><input type="range" data-in="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`;
-const cell = (key) => `<span class="cstr-num"><b>${esc(U[key])}</b><output data-cell="${key}"></output></span>`;
+const slider = (key, min, max, step, value) => `<label class="cstr-ctl"><span>${esc(U[key])} <output data-out="${key}"></output></span><input type="range" data-in="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`;
+const ROWS = [
+  ["volume", "both3"], ["feed", "pair"], ["olr", "same"], ["share", "same"], ["ch4", "pair"], ["biogas", "pair"], ["perM3", "same"], ["power", "pair"], ["cows", "farm"], ["turns", "lab"], ["washout", "same"],
+];
+const row = ([key, kind]) => `<tr data-row="${key}"><th scope="row">${esc(U[key])}</th>${kind === "same" ? `<td colspan="2" class="cstr-same"><output data-cell="${key}"></output></td>` : `<td><output data-cell="${key}.farm"></output></td><td><output data-cell="${key}.lab"></output></td>`}</tr>`;
 const panel = `
 <section class="cstr-panel" aria-label="${esc(t("title"))}">
   <div class="cstr-ctls">
-    ${slider("temperature", 20, 55, 1, M.DESIGN.temperature, " °C")}
-    ${slider("hrt", 3, 60, 1, M.DESIGN.hrt, " d")}
-    ${slider("ts", 4, 12, 0.5, M.DESIGN.ts * 100, " %")}
+    <h2>${esc(U.controls)}</h2>
+    ${slider("temperature", 20, 55, 1, M.DESIGN.temperature)}
+    ${slider("hrt", 3, 60, 1, M.DESIGN.hrt)}
+    ${slider("ts", 4, 12, 0.5, M.DESIGN.ts * 100)}
     <label class="cstr-ctl"><span>${esc(U.mixer)}</span><select data-in="mixer"><option value="auto">${esc(U.auto)}</option><option value="on">${esc(U.on)}</option><option value="off">${esc(U.off)}</option></select></label>
     <label class="cstr-ctl"><span>${esc(U.speed)}</span><select data-in="speed">${[2.5, 5, 10, 30, 60].map((v) => `<option value="${v}"${v === 10 ? " selected" : ""}>${String(v).replace(".", L ? "," : ".")} ${esc(U.perSec)}</option>`).join("")}</select></label>
+    <div class="cstr-btns"><button type="button" data-act="feed">${esc(U.feedNow)}</button><button type="button" data-act="bag">${esc(U.emptyBag)}</button></div>
   </div>
-  <div class="cstr-nums">${["feed", "cows", "olr", "share", "ch4", "biogas", "kwe", "washout"].map(cell).join("")}</div>
-  <p class="cstr-warn" role="status" aria-live="polite" data-warn></p>
+  <div class="cstr-nums">
+    <table class="cstr-cmp"><thead><tr><th></th><th scope="col">${esc(U.farm)}</th><th scope="col">${esc(U.lab)}</th></tr></thead><tbody>${ROWS.map(row).join("")}</tbody></table>
+    <p class="cstr-warn" role="status" aria-live="polite" data-warn></p>
+  </div>
   <figure class="cstr-chart">
     <figcaption>${esc(U.chart)}</figcaption>
-    <div class="cstr-plot" data-plot><svg viewBox="0 0 640 230" role="img" aria-label="${esc(U.chart)}"></svg><div class="cstr-tip" data-tip hidden></div></div>
-    <details><summary>${esc(U.table)}</summary><table data-table><thead><tr><th>${esc(U.xAxis)}</th><th>${esc(U.olr)}</th><th>${esc(U.share)}</th><th>${esc(U.yAxis)}</th></tr></thead><tbody></tbody></table></details>
+    <div class="cstr-plot" data-plot><svg viewBox="0 0 640 260" role="img" aria-label="${esc(U.chart)}"></svg><div class="cstr-tip" data-tip hidden></div></div>
+    <details><summary>${esc(U.table)}</summary><table data-table><thead><tr><th>${esc(U.xAxis)}</th><th>${esc(U.olr)}</th><th>${esc(U.share)}</th><th>${esc(U.yFarm)}</th><th>${esc(U.yLab)}</th></tr></thead><tbody></tbody></table></details>
   </figure>
 </section>`;
 
-// ── Live ────────────────────────────────────────────────────────────────────
-const LIVE_DATA = {
-  P, CUT, KEPT, ROOF, RI, Z0, LEVEL, RIM_Z, INNER_A, INNER_MIN, INNER_MAX, HEAT_R,
-  hub: G.add3(MOTOR.o, G.mul3(MOTOR.a, HUB_S + 0.4)), u: MOTOR.u, v: MOTOR.v, BLADE_R,
-  design: M.DESIGN, fans: FANS, stack: STACK, flare: [...FLARE, FLARE_TOP],
-  lang, text: { day: L ? "Dia " : "Day ", gas: L ? "gás " : "gas ", chpOn: L ? "motor ligado" : "engine on", chpOff: L ? "motor parado" : "engine off", flaring: L ? "flare aceso" : "flaring" }, U,
-};
+// ── Live: one clock, one panel, two figures ─────────────────────────────────
 const shellLive = SHELL_SRC.replace(/^import .*$/m, "").replace(/^export /gm, "");
 const modelLive = MODEL_SRC.replace(/^export /gm, "");
 const live = `
 ${shellLive}
 ${modelLive}
-const C = ${JSON.stringify(LIVE_DATA)};
-const P = C.P;
-const U = C.U;
-const stage = document.querySelector(".iso-stage");
-const svg = stage.querySelector("svg");
-const readout = document.querySelector("[data-readout]");
-const q = (s) => svg.querySelector(s);
-const qa = (s) => [...svg.querySelectorAll(s)];
-const still = matchMedia("(prefers-reduced-motion: reduce)");
-const parts = {
-  inner: q('[data-part="inner"]'), prop: q('[data-part="prop"]'), bubbles: q('[data-part="bubbles"]'), swirl: q('[data-part="swirl"]'),
-  scum: qa('[data-part="scum"]'), sediment: qa('[data-part="sediment"]'), heat: qa('[data-part="heat"]'),
-  fans: q('[data-part="fans"]'), exhaust: q('[data-part="exhaust"]'), flame: q('[data-part="flame"]'), lamp: q('[data-part="chp-lamp"]'),
-};
-const flows = {};
-qa("[data-flow-of]").forEach((el) => (flows[el.dataset.flowOf] ??= []).push(el));
-const setFlow = (names, on) => names.forEach((n) => (flows[n] || []).forEach((el) => el.classList.toggle("on", on)));
+const U = ${JSON.stringify(U)};
+const LANG = ${JSON.stringify(lang)};
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const capVol = (h) => (Math.PI * h * (3 * C.INNER_A ** 2 + h * h)) / 6;
-const VMIN = capVol(C.INNER_MIN), VMAX = capVol(C.INNER_MAX);
-const hOf = (f) => { const want = VMIN + f * (VMAX - VMIN); let lo = C.INNER_MIN, hi = C.INNER_MAX; for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (capVol(m) < want) lo = m; else hi = m; } return (lo + hi) / 2; };
-const STORE_M3 = (VMAX - VMIN) / 1000;
-const PUMP_M3H = 10;   // feed pump rate
-const PULSES = 8;      // feeds a day
-
-// Simulation, in hours of plant time.
-const sim = { hour: 6, fill: 0.45, chp: false, flaring: 0, temp: C.design.temperature, heater: false, mixing: false, feeding: false, strat: 0.4, prop: 0, fan: 0, minutesPerSecond: 10, mixerMode: "auto" };
-const plant = { ...C.design };
-let steadyNow = steady(plant), gasRate = steadyNow.biogas / 24;
-const CHP_BIOGAS = 50 / (ENERGY.kwhPerM3 * ENERGY.electrical) / FEED.ch4InBiogas; // m3 biogas / h at 50 kWe
-
-const bubbles = Array.from({ length: 70 }, (_, i) => ({ face: i % 2, r: 3 + Math.random() * (C.RI - 6), z: C.Z0 + Math.random() * (C.LEVEL - C.Z0), s: 0.5 + Math.random() * 0.7, live: Math.random() < 0.5 }));
-const puffs = Array.from({ length: 10 }, (_, i) => ({ z: (i / 10) * 18, x: 0 }));
-const polar3 = (r, t, z) => [r * Math.cos(t), r * Math.sin(t), z];
-
-function drawMembrane(f) {
-  const cap = capAt(C.INNER_A, C.RIM_Z, hOf(f));
-  const s = shellSvg(cap, C.ROOF[0], C.ROOF[1], P, { nTheta: 32, nRing: 7, under: "cstr-gas-under" });
-  parts.inner.innerHTML = s.far + '<path class="iso-line" data-tone="mid" d="' + s.edges + '"/><path class="iso-line cstr-cut" data-tone="hi" d="' + s.cuts + '"/>';
-}
-function drawProp(angle) {
-  let d = "";
-  for (let b = 0; b < 3; b++) {
-    const a0 = angle + (b * 2 * Math.PI) / 3;
-    const pts = [[1.2, -0.9], [C.BLADE_R * 0.55, -1.9], [C.BLADE_R, -0.6], [C.BLADE_R * 0.92, 0.9], [1.2, 0.9]].map(([rr, w]) => {
-      const c = Math.cos(a0), s = Math.sin(a0);
-      const x = rr * c - w * s, y = rr * s + w * c;
-      return iso([C.hub[0] + C.u[0] * x + C.v[0] * y, C.hub[1] + C.u[1] * x + C.v[1] * y, C.hub[2] + C.u[2] * x + C.v[2] * y], P);
-    });
-    d += pathOf(pts, true);
-  }
-  parts.prop.innerHTML = '<path class="iso-fill" d="' + d + '"/><path class="iso-shade" data-shade="2" d="' + d + '"/><path class="iso-line" data-tone="hi" d="' + d + '"/>';
-}
-function drawBubbles(dtH) {
-  const rate = clamp((gasRate * 24 * FEED.ch4InBiogas) / 250, 0, 2.5);
-  let html = "";
-  for (const b of bubbles) {
-    if (b.live) {
-      b.z += dtH * 30 * b.s * (sim.mixing ? 1.3 : 1);
-      if (b.z > C.LEVEL - 0.6) { b.live = Math.random() < rate * 0.6; b.z = C.Z0 + 1 + Math.random() * 6; b.r = 3 + Math.random() * (C.RI - 6); }
-    } else if (Math.random() < rate * dtH * 2) b.live = true;
-    if (!b.live) continue;
-    const p = iso(polar3(b.r, C.CUT[b.face], b.z), P);
-    html += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + (0.55 + 0.35 * b.s).toFixed(2) + '"/>';
-  }
-  parts.bubbles.innerHTML = html;
-}
-function drawFans() {
-  let d = "";
-  for (const [x, y, z] of C.fans) for (let b = 0; b < 4; b++) {
-    const a = sim.fan + (b * Math.PI) / 2;
-    d += lineOnTop([x + 1.2 * Math.cos(a), y + 1.2 * Math.sin(a)], [x + 4 * Math.cos(a + 0.35), y + 4 * Math.sin(a + 0.35)], z, P);
-  }
-  parts.fans.innerHTML = '<path class="iso-line" data-tone="mid" d="' + d + '"/>';
-}
-function drawExhaust(dtH) {
-  let html = "";
-  for (const p of puffs) {
-    p.z += dtH * 40;
-    if (p.z > 18) p.z -= 18;
-    const a = iso([C.stack[0] + p.z * 0.25, C.stack[1], C.stack[2] + p.z], P);
-    const alpha = sim.chp ? (1 - p.z / 18) * 0.55 : 0;
-    if (alpha > 0.02) html += '<circle cx="' + a[0].toFixed(1) + '" cy="' + a[1].toFixed(1) + '" r="' + (0.8 + p.z * 0.09).toFixed(2) + '" fill-opacity="' + alpha.toFixed(2) + '"/>';
-  }
-  parts.exhaust.innerHTML = html;
-}
-function drawFlame(t) {
-  const f = sim.flaring;
-  if (f < 0.02) { parts.flame.innerHTML = ""; return; }
-  const [x, y, z] = C.flare;
-  const h = (7 + 2 * Math.sin(t * 9) + Math.sin(t * 23)) * f;
-  const pts = [[-2.2, 0], [-1.4, h * 0.5], [-0.3, h], [0.6, h * 0.62], [1.6, h * 0.35], [2.2, 0]].map(([dx, dz]) => iso([x + dx * 0.574, y - dx * 0.819, z + dz], P));
-  parts.flame.innerHTML = '<path class="cstr-flame" d="' + pathOf(pts, true) + '" fill-opacity="' + (0.35 + 0.6 * f).toFixed(2) + '"/>';
-}
-const clock = (h) => { const day = Math.floor(h / 24) + 1, hh = Math.floor(h % 24), mm = Math.floor((h * 60) % 60); return C.text.day + day + " · " + String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
-
-let frame = 0, last = 0, visible = false, wall = 0;
+const clockText = (h) => { const day = Math.floor(h / 24) + 1, hh = Math.floor(h % 24), mm = Math.floor((h * 60) % 60); return ${JSON.stringify(L ? "Dia " : "Day ")} + day + " · " + String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
+${farm.live}
+${lab.live}
+const clock = { hour: 6, minutesPerSecond: 10, mixerMode: "auto" };
+const roots = { farm: document.querySelector('[data-fig="farm"]'), lab: document.querySelector('[data-fig="lab"]') };
+const figs = { farm: farmLive(${JSON.stringify(farm.data)}, roots.farm, clock), lab: labLive(${JSON.stringify(lab.data)}, roots.lab, clock) };
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+const seen = { farm: false, lab: false };
+let frame = 0, last = 0, wall = 0;
 function tick(now) {
   const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
   last = now;
   wall += dt;
   const calm = still.matches;
-  const dtH = calm ? 0 : (dt * sim.minutesPerSecond) / 60;
-  sim.hour += dtH;
-  // The process answers a change over hours, not at once (a real one takes weeks).
-  gasRate += (steadyNow.biogas / 24 - gasRate) * (1 - Math.exp(-dtH / 6));
-  // Feeding: eight pulses a day at the pump rate; the overflow lets the same volume out.
-  sim.feeding = sim.hour % (24 / PULSES) < steadyNow.q / PULSES / PUMP_M3H;
-  // Mixer: 15 minutes in every hour on auto. Without it, scum and sediment build up.
-  sim.mixing = sim.mixerMode === "on" || (sim.mixerMode === "auto" && sim.hour % 1 < 0.25);
-  sim.strat = clamp(sim.strat + dtH * (sim.mixing ? -1.6 : 0.12), 0, 1);
-  // Gas: in from the slurry; the engine burns 50 kWe worth between 70 % and 30 % full; the flare takes what would overfill.
-  if (sim.fill > 0.7) sim.chp = true;
-  if (sim.fill < 0.3) sim.chp = false;
-  const net = gasRate - (sim.chp ? CHP_BIOGAS : 0);
-  const next = sim.fill + (net * dtH) / STORE_M3;
-  const burning = next > 0.985 && net > 0;
-  sim.fill = clamp(burning ? 0.985 : next, 0, 1);
-  sim.flaring += ((burning ? 1 : 0) - sim.flaring) * (1 - Math.exp(-dt / 0.6));
-  // Heating: loops on below the set point, off above it; the tank loses heat to a 22 °C day.
-  const set = plant.temperature;
-  if (sim.temp < set - 0.3) sim.heater = true;
-  if (sim.temp > set + 0.3) sim.heater = false;
-  sim.temp += dtH * ((sim.heater ? 0.9 + 0.03 * Math.max(0, set - 37) : 0) - 0.03 * (sim.temp - 22));
-  if (!calm) { sim.prop += sim.mixing ? dt * 2 * Math.PI * 2.2 : 0; sim.fan += sim.chp ? dt * 2 * Math.PI * 1.4 : 0; }
-  drawMembrane(sim.fill);
-  drawProp(sim.prop);
-  drawBubbles(dtH);
-  drawFans();
-  drawExhaust(dtH);
-  drawFlame(wall);
-  parts.scum.forEach((el) => (el.style.opacity = (0.15 + 0.85 * sim.strat).toFixed(3)));
-  parts.sediment.forEach((el) => (el.style.opacity = (0.15 + 0.85 * sim.strat).toFixed(3)));
-  parts.heat.forEach((el) => el.classList.toggle("on", sim.heater));
-  parts.swirl.classList.toggle("on", sim.mixing);
-  parts.lamp.classList.toggle("on", sim.chp);
-  setFlow(["feed.suction", "feed.inlet", "digestate.drop"], sim.feeding);
-  setFlow(["gas.offtake", "gas.line"], sim.chp);
-  setFlow(["gas.flare"], sim.flaring > 0.5);
-  setFlow(["heat.flow", "heat.return"], sim.heater);
-  const text = clock(sim.hour) + " · " + sim.temp.toFixed(1) + " °C · " + C.text.gas + Math.round(sim.fill * 100) + " % · " + (sim.flaring > 0.5 ? C.text.flaring : sim.chp ? C.text.chpOn : C.text.chpOff);
-  if (readout.textContent !== text) readout.textContent = text;
-  frame = visible ? requestAnimationFrame(tick) : 0;
+  const dtH = calm ? 0 : (dt * clock.minutesPerSecond) / 60;
+  clock.hour += dtH;
+  // Both plants run on the clock; only the ones on screen are drawn.
+  for (const name of Object.keys(figs)) figs[name].tick(dt, dtH, wall, calm, seen[name]);
+  frame = seen.farm || seen.lab ? requestAnimationFrame(tick) : 0;
 }
-const run = () => { if (!frame && visible) { last = 0; frame = requestAnimationFrame(tick); } };
-new IntersectionObserver((entries) => { visible = entries[entries.length - 1].isIntersecting; if (visible) run(); }, { rootMargin: "120px 0px" }).observe(stage);
+const run = () => { if (!frame && (seen.farm || seen.lab)) { last = 0; frame = requestAnimationFrame(tick); } };
+for (const name of Object.keys(roots)) new IntersectionObserver((entries) => { seen[name] = entries[entries.length - 1].isIntersecting; run(); }, { rootMargin: "120px 0px" }).observe(roots[name]);
 
 // ── Panel ──
-const nf = (d) => new Intl.NumberFormat(C.lang === "pt" ? "pt-BR" : "en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
-const f0 = nf(0), f1 = nf(1), f2 = nf(2);
+const nf = (d) => new Intl.NumberFormat(LANG === "pt" ? "pt-BR" : "en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
+const f0 = nf(0), f1 = nf(1), f2 = nf(2), f3 = nf(3);
+const sig = (v) => (v === 0 ? f0 : v >= 100 ? f0 : v >= 10 ? f1 : v >= 1 ? f2 : f3).format(v);
 const ins = Object.fromEntries([...document.querySelectorAll("[data-in]")].map((el) => [el.dataset.in, el]));
 const outs = Object.fromEntries([...document.querySelectorAll("[data-out]")].map((el) => [el.dataset.out, el]));
 const cells = Object.fromEntries([...document.querySelectorAll("[data-cell]")].map((el) => [el.dataset.cell, el]));
 const warn = document.querySelector("[data-warn]");
+const plant = { ...DESIGN };
+let farmNow = steady(plant), labNow = steady(plant, LAB_VOLUME);
 function readPanel() {
   plant.temperature = +ins.temperature.value;
   plant.hrt = +ins.hrt.value;
   plant.ts = +ins.ts.value / 100;
-  sim.mixerMode = ins.mixer.value;
-  sim.minutesPerSecond = +ins.speed.value;
-  steadyNow = steady(plant);
+  clock.mixerMode = ins.mixer.value;
+  clock.minutesPerSecond = +ins.speed.value;
+  farmNow = steady(plant);
+  labNow = steady(plant, LAB_VOLUME);
+  figs.farm.update({ ...plant });
+  figs.lab.update({ ...plant });
   outs.temperature.textContent = f0.format(plant.temperature) + " °C";
   outs.hrt.textContent = f0.format(plant.hrt) + " d";
   outs.ts.textContent = f1.format(plant.ts * 100) + " %";
-  const s = steadyNow;
-  cells.feed.textContent = f1.format(s.q) + " m³/d";
-  cells.cows.textContent = "≈ " + f0.format(Math.round(s.cows / 5) * 5);
-  cells.olr.textContent = f2.format(s.olr) + " kg VS/m³·d";
-  cells.share.textContent = f0.format(s.share * 100) + " %";
-  cells.ch4.textContent = f0.format(s.ch4) + " Nm³/d";
-  cells.biogas.textContent = f0.format(s.biogas) + " Nm³/d";
-  cells.kwe.textContent = f1.format(s.kwe) + " kW";
-  cells.washout.textContent = Number.isFinite(s.washoutHrt) ? f1.format(s.washoutHrt) + " d" : "—";
+  const a = farmNow, b = labNow;
+  cells["volume.farm"].textContent = f0.format(VOLUME) + " m³";
+  cells["volume.lab"].textContent = f1.format(LAB_VOLUME * 1000) + " L";
+  cells["feed.farm"].textContent = f1.format(a.q) + " m³/d";
+  cells["feed.lab"].textContent = f0.format(b.q * 1e6) + " mL/d";
+  cells.olr.textContent = f2.format(a.olr) + " kg VS/m³·d";
+  cells.share.textContent = f0.format(a.share * 100) + " %";
+  cells["ch4.farm"].textContent = f0.format(a.ch4) + " Nm³/d";
+  cells["ch4.lab"].textContent = f2.format(b.ch4 * 1000) + " NL/d";
+  cells["biogas.farm"].textContent = f0.format(a.biogas) + " Nm³/d";
+  cells["biogas.lab"].textContent = f2.format(b.biogas * 1000) + " NL/d";
+  cells.perM3.textContent = f2.format(a.ch4PerM3) + " Nm³/m³·d";
+  cells["power.farm"].textContent = f1.format(a.kwe) + " kW";
+  cells["power.lab"].textContent = sig(b.kwe * 1000) + " W";
+  cells["cows.farm"].textContent = "≈ " + f0.format(Math.round(a.cows / 5) * 5);
+  cells["cows.lab"].textContent = "—";
+  cells["turns.farm"].textContent = "—";
+  cells["turns.lab"].textContent = f0.format((b.biogas * 1e6) / LAB.meterMl) + " " + U.turnsUnit;
+  cells.washout.textContent = Number.isFinite(a.washoutHrt) ? f1.format(a.washoutHrt) + " d" : "—";
   const notes = [];
-  if (plant.hrt <= s.washoutHrt) notes.push('<span class="cstr-badge" data-level="critical" aria-hidden="true">✕</span> ' + U.warnWash);
-  else if (s.olr > 4) notes.push('<span class="cstr-badge" data-level="warning" aria-hidden="true">!</span> ' + U.warnOlr);
+  if (plant.hrt <= a.washoutHrt) notes.push('<span class="cstr-badge" data-level="critical" aria-hidden="true">✕</span> ' + U.warnWash);
+  else if (a.olr > 4) notes.push('<span class="cstr-badge" data-level="warning" aria-hidden="true">!</span> ' + U.warnOlr);
   warn.innerHTML = notes.join("<br>");
-  cells.olr.dataset.level = s.olr > 4 ? "warning" : "";
+  cells.olr.dataset.level = a.olr > 4 ? "warning" : "";
   drawChart();
 }
 Object.values(ins).forEach((el) => el.addEventListener("input", readPanel));
-stage.addEventListener("keydown", (event) => {
+const feedNow = () => { figs.farm.feedNow(); figs.lab.feedNow(); };
+document.querySelector('[data-act="feed"]').addEventListener("click", feedNow);
+document.querySelector('[data-act="bag"]').addEventListener("click", () => figs.lab.emptyBag && figs.lab.emptyBag());
+document.querySelectorAll(".iso-stage").forEach((stage) => stage.addEventListener("keydown", (event) => {
   const speeds = [...ins.speed.options].map((o) => o.value);
   let i = speeds.indexOf(ins.speed.value);
   if (event.key === "ArrowRight") i = Math.min(speeds.length - 1, i + 1);
   else if (event.key === "ArrowLeft") i = Math.max(0, i - 1);
   else if (event.key === "m" || event.key === "M") { const o = ["auto", "off", "on"]; ins.mixer.value = o[(o.indexOf(ins.mixer.value) + 1) % 3]; readPanel(); event.preventDefault(); return; }
+  else if (event.key === "f" || event.key === "F") { feedNow(); event.preventDefault(); return; }
   else return;
   ins.speed.value = speeds[i];
   readPanel();
   event.preventDefault();
-});
+}));
 
-// ── Chart: CH4 against HRT for the current temperature and feed, with washout and overload marked ──
+// ── Chart: one CH4 curve against HRT, read on two axes: farm on the left, bench on the right ──
 const plot = document.querySelector("[data-plot]");
 const chartSvg = plot.querySelector("svg");
 const tip = plot.querySelector("[data-tip]");
-const W = 640, H = 230, M = { l: 56, r: 16, t: 14, b: 34 };
+const W = 640, H = 260, Mg = { l: 56, r: 60, t: 22, b: 34 };
 const X0 = 2, X1 = 60;
-const sx = (h) => M.l + ((h - X0) / (X1 - X0)) * (W - M.l - M.r);
-const hx = (px) => X0 + ((px - M.l) / (W - M.l - M.r)) * (X1 - X0);
-let curve = [], sy = () => 0, yMax = 1;
+const RATIO = (LAB_VOLUME * 1000) / VOLUME;   // NL at the bench per Nm3 at the farm
+const sx = (h) => Mg.l + ((h - X0) / (X1 - X0)) * (W - Mg.l - Mg.r);
+const hx = (px) => X0 + ((px - Mg.l) / (W - Mg.l - Mg.r)) * (X1 - X0);
+let sy = () => 0;
 function drawChart() {
-  curve = Array.from({ length: 233 }, (_, i) => { const h = X0 + (i / 232) * (X1 - X0); return { h, s: steady({ ...plant, hrt: h }) }; });
-  yMax = Math.max(50, ...curve.map((p) => p.s.ch4)) * 1.12;
+  const curve = Array.from({ length: 233 }, (_, i) => { const h = X0 + (i / 232) * (X1 - X0); return { h, s: steady({ ...plant, hrt: h }) }; });
+  const yMax = Math.max(50, ...curve.map((p) => p.s.ch4)) * 1.12;
   const step = [50, 100, 200, 250, 500, 1000].find((v) => yMax / v <= 5) || 2000;
-  sy = (v) => H - M.b - (v / yMax) * (H - M.t - M.b);
-  const wash = steadyNow.washoutHrt, olr4 = steadyNow.s0 / 4;
+  sy = (v) => H - Mg.b - (v / yMax) * (H - Mg.t - Mg.b);
+  const wash = farmNow.washoutHrt, olr4 = farmNow.s0 / 4;
   let g = "";
-  for (let v = 0; v <= yMax; v += step) g += '<line class="grid" x1="' + M.l + '" x2="' + (W - M.r) + '" y1="' + sy(v) + '" y2="' + sy(v) + '"/><text class="tick" x="' + (M.l - 8) + '" y="' + (sy(v) + 4) + '" text-anchor="end">' + f0.format(v) + "</text>";
-  for (let h = 10; h <= X1; h += 10) g += '<text class="tick" x="' + sx(h) + '" y="' + (H - M.b + 18) + '" text-anchor="middle">' + h + "</text>";
+  for (let v = 0; v <= yMax; v += step) g += '<line class="grid" x1="' + Mg.l + '" x2="' + (W - Mg.r) + '" y1="' + sy(v) + '" y2="' + sy(v) + '"/><text class="tick" x="' + (Mg.l - 8) + '" y="' + (sy(v) + 4) + '" text-anchor="end">' + f0.format(v) + '</text><text class="tick" x="' + (W - Mg.r + 8) + '" y="' + (sy(v) + 4) + '" text-anchor="start">' + sig(v * RATIO) + "</text>";
+  for (let h = 10; h <= X1; h += 10) g += '<text class="tick" x="' + sx(h) + '" y="' + (H - Mg.b + 18) + '" text-anchor="middle">' + h + "</text>";
   const zone = (a, b, level, label) => {
     if (b <= X0 || a >= b) return "";
     const xa = sx(Math.max(X0, a)), xb = sx(Math.min(X1, b));
-    return '<rect class="zone" data-level="' + level + '" x="' + xa + '" y="' + M.t + '" width="' + (xb - xa) + '" height="' + (H - M.t - M.b) + '"/>' + (xb - xa > 26 ? '<text class="zone-label" x="' + (xa + 5) + '" y="' + (H - M.b - 7) + '">' + label + "</text>" : "");
+    return '<rect class="zone" data-level="' + level + '" x="' + xa + '" y="' + Mg.t + '" width="' + (xb - xa) + '" height="' + (H - Mg.t - Mg.b) + '"/>' + (xb - xa > 26 ? '<text class="zone-label" x="' + (xa + 5) + '" y="' + (H - Mg.b - 7) + '">' + label + "</text>" : "");
   };
   g += zone(X0, wash, "critical", U.zoneWash) + zone(wash, olr4, "warning", U.zoneOlr);
-  g += '<line class="axis" x1="' + M.l + '" x2="' + (W - M.r) + '" y1="' + sy(0) + '" y2="' + sy(0) + '"/>';
+  g += '<line class="axis" x1="' + Mg.l + '" x2="' + (W - Mg.r) + '" y1="' + sy(0) + '" y2="' + sy(0) + '"/>';
   g += '<path class="series" d="' + curve.map((p, i) => (i ? "L" : "M") + sx(p.h).toFixed(1) + " " + sy(p.s.ch4).toFixed(1)).join("") + '"/>';
-  const cx = sx(plant.hrt), cy = sy(steadyNow.ch4);
-  const flip = cx > W - M.r - 110;
-  const ly = Math.max(M.t + 22, cy - 9);
-  g += '<circle class="now" cx="' + cx + '" cy="' + cy + '" r="5"/><text class="now-label" x="' + (flip ? cx - 9 : cx + 9) + '" y="' + ly + '" text-anchor="' + (flip ? "end" : "start") + '">' + U.now + " · " + f0.format(steadyNow.ch4) + "</text>";
-  g += '<text class="axis-title" x="' + (W - M.r) + '" y="' + (H - 4) + '" text-anchor="end">' + U.xAxis + '</text><text class="axis-title" x="' + M.l + '" y="' + (M.t - 2) + '" text-anchor="start" dx="4">' + U.yAxis + "</text>";
-  g += '<line class="cross" data-cross x1="0" x2="0" y1="' + M.t + '" y2="' + (H - M.b) + '" style="display:none"/><circle class="cross-dot" data-cross-dot r="4" style="display:none"/>';
+  const cx = sx(plant.hrt), cy = sy(farmNow.ch4);
+  const flip = cx > W - Mg.r - 150;
+  const ly = Math.max(Mg.t + 22, cy - 9);
+  g += '<circle class="now" cx="' + cx + '" cy="' + cy + '" r="5"/><text class="now-label" x="' + (flip ? cx - 9 : cx + 9) + '" y="' + ly + '" text-anchor="' + (flip ? "end" : "start") + '">' + U.now + " · " + f0.format(farmNow.ch4) + " Nm³ · " + f2.format(labNow.ch4 * 1000) + " NL</text>";
+  g += '<text class="axis-title" x="' + (W - Mg.r) + '" y="' + (H - 4) + '" text-anchor="end">' + U.xAxis + '</text><text class="axis-title" x="' + Mg.l + '" y="' + (Mg.t - 8) + '" text-anchor="start">' + U.yFarm + '</text><text class="axis-title" x="' + (W - Mg.r + 50) + '" y="' + (Mg.t - 8) + '" text-anchor="end">' + U.yLab + "</text>";
+  g += '<line class="cross" data-cross x1="0" x2="0" y1="' + Mg.t + '" y2="' + (H - Mg.b) + '" style="display:none"/><circle class="cross-dot" data-cross-dot r="4" style="display:none"/>';
   chartSvg.innerHTML = g;
-  const rows = [5, 10, 15, 20, 25, 30, 40, 60].map((h) => { const s = steady({ ...plant, hrt: h }); return "<tr><td>" + h + "</td><td>" + f2.format(s.olr) + "</td><td>" + f0.format(s.share * 100) + " %</td><td>" + f0.format(s.ch4) + "</td></tr>"; });
+  const rows = [5, 10, 15, 20, 25, 30, 40, 60].map((h) => { const s = steady({ ...plant, hrt: h }); return "<tr><td>" + h + "</td><td>" + f2.format(s.olr) + "</td><td>" + f0.format(s.share * 100) + " %</td><td>" + f0.format(s.ch4) + "</td><td>" + f2.format(s.ch4 * RATIO) + "</td></tr>"; });
   document.querySelector("[data-table] tbody").innerHTML = rows.join("");
 }
 plot.addEventListener("pointermove", (event) => {
@@ -768,22 +238,20 @@ plot.addEventListener("pointermove", (event) => {
   cross.setAttribute("x1", sx(h)); cross.setAttribute("x2", sx(h)); cross.style.display = "";
   dot.setAttribute("cx", sx(h)); dot.setAttribute("cy", sy(s.ch4)); dot.style.display = "";
   tip.hidden = false;
-  tip.innerHTML = "<b>" + U.xAxis.replace(" (d)", "") + " " + f1.format(h) + " d</b><br>" + f0.format(s.ch4) + " Nm³ CH₄/d<br>" + U.olr + " " + f2.format(s.olr) + "<br>" + U.share + " " + f0.format(s.share * 100) + " %";
+  tip.innerHTML = "<b>" + U.xAxis.replace(" (d)", "") + " " + f1.format(h) + " d</b><br>" + U.farm + ": " + f0.format(s.ch4) + " Nm³ CH₄/d<br>" + U.lab + ": " + f2.format(s.ch4 * RATIO) + " NL CH₄/d<br>" + U.olr + " " + f2.format(s.olr) + " · " + U.share + " " + f0.format(s.share * 100) + " %";
   const left = (sx(h) / W) * box.width;
-  tip.style.left = Math.min(box.width - 170, left + 12) + "px";
+  tip.style.left = Math.max(0, Math.min(box.width - 220, left + 12)) + "px";
   tip.style.top = ((sy(s.ch4) / H) * box.height - 10) + "px";
 });
 plot.addEventListener("pointerleave", () => { tip.hidden = true; chartSvg.querySelectorAll("[data-cross],[data-cross-dot]").forEach((el) => (el.style.display = "none")); });
 
 readPanel();
-drawMembrane(sim.fill);
-drawProp(0);
-drawFans();
+for (const name of Object.keys(figs)) figs[name].tick(0, 0, 0, true, true);
 `;
 
 const CSS = `
-.iso{--cstr-slurry:#b7aa98;--cstr-slurry-top:#c9bead;--cstr-slurry-dark:#8f8270;--cstr-scum:#9d8f78;--cstr-sediment:#7f7362;--cstr-insul:#f1ead2;--cstr-heat:#d8d8d4;--cstr-heat-on:#d9622b;--cstr-under:#d6d6d2;--cstr-bubble:#fbfbfa;--cstr-gas-0:#a9adb0;--cstr-gas-1:#b4b8bb;--cstr-gas-2:#bfc3c6;--cstr-gas-3:#cacdd0;--cstr-gas-under:#8e9295;--cstr-flame:#ec835a;--cstr-lamp-on:#0ca30c;--cstr-series:#2a78d6;--cstr-grid:#e1e0d9;--cstr-critical:#d03b3b;--cstr-warning:#fab219;--cstr-surface:#fcfcfb}
-.iso[data-theme="dark"]{--cstr-slurry:#4a4339;--cstr-slurry-top:#5a5246;--cstr-slurry-dark:#3a342c;--cstr-scum:#62584a;--cstr-sediment:#2f2a23;--cstr-insul:#4d4a3d;--cstr-heat:#2a2a2a;--cstr-heat-on:#e0773f;--cstr-under:#101010;--cstr-bubble:#cfd3d6;--cstr-gas-0:#30343a;--cstr-gas-1:#363b41;--cstr-gas-2:#3d4249;--cstr-gas-3:#444a51;--cstr-gas-under:#24272b;--cstr-flame:#ec835a;--cstr-lamp-on:#0ca30c;--cstr-series:#3987e5;--cstr-grid:#2c2c2a;--cstr-surface:#1a1a19}
+.iso{--cstr-slurry:#b7aa98;--cstr-slurry-top:#c9bead;--cstr-slurry-dark:#8f8270;--cstr-scum:#9d8f78;--cstr-sediment:#7f7362;--cstr-insul:#f1ead2;--cstr-heat:#d8d8d4;--cstr-heat-on:#d9622b;--cstr-under:#d6d6d2;--cstr-bubble:#fbfbfa;--cstr-gas-0:#a9adb0;--cstr-gas-1:#b4b8bb;--cstr-gas-2:#bfc3c6;--cstr-gas-3:#cacdd0;--cstr-gas-under:#8e9295;--cstr-flame:#ec835a;--cstr-lamp-on:#0ca30c;--cstr-series:#2a78d6;--cstr-grid:#e1e0d9;--cstr-critical:#d03b3b;--cstr-warning:#fab219;--cstr-surface:#fcfcfb;--cstr-screen:#2a2d2a;--cstr-screen-text:#9fe0a8}
+.iso[data-theme="dark"]{--cstr-slurry:#4a4339;--cstr-slurry-top:#5a5246;--cstr-slurry-dark:#3a342c;--cstr-scum:#62584a;--cstr-sediment:#2f2a23;--cstr-insul:#4d4a3d;--cstr-heat:#2a2a2a;--cstr-heat-on:#e0773f;--cstr-under:#101010;--cstr-bubble:#cfd3d6;--cstr-gas-0:#30343a;--cstr-gas-1:#363b41;--cstr-gas-2:#3d4249;--cstr-gas-3:#444a51;--cstr-gas-under:#24272b;--cstr-flame:#ec835a;--cstr-lamp-on:#0ca30c;--cstr-series:#3987e5;--cstr-grid:#2c2c2a;--cstr-surface:#1a1a19;--cstr-screen:#070807;--cstr-screen-text:#7fd08a}
 .cstr-slurry .iso-fill,.cstr-slurry .iso-shade{fill:var(--cstr-slurry)}
 .cstr-slurry .iso-shade[data-shade="0"],.cstr-slurry .iso-shade[data-shade="1"]{fill:var(--cstr-slurry-dark)}
 .cstr-slurry .iso-top{fill:var(--cstr-slurry-top)}
@@ -801,8 +269,11 @@ const CSS = `
 .cstr-cut{stroke-width:1.4}
 .cstr-outer-cut .iso-line{stroke-width:1.4}
 .cstr-louvre{fill:var(--anatomy-shade-0)}
+.cstr-screen{fill:var(--cstr-screen)}
+.iso .iso-face-text.cstr-screen-text{fill:var(--cstr-screen-text);font-family:var(--anatomy-mono);font-weight:600}
 [data-part="bubbles"] circle{fill:var(--cstr-bubble);stroke:var(--anatomy-lo);stroke-width:.35}
 [data-part="exhaust"] circle{fill:var(--anatomy-lo)}
+.cstr-needle{fill:var(--anatomy-lit);stroke:var(--anatomy-lit);stroke-width:.4;stroke-linejoin:round}
 .cstr-flame{fill:var(--cstr-flame);stroke:none}
 .cstr-lamp{fill:var(--anatomy-shade-0);stroke:var(--anatomy-lo);stroke-width:.4;transition:fill .4s}
 .cstr-lamp.on{fill:var(--cstr-lamp-on)}
@@ -810,30 +281,47 @@ const CSS = `
 .on>.cstr-flow{opacity:.9}
 [data-part="swirl"]{opacity:0;transition:opacity 1s}
 [data-part="swirl"].on{opacity:.8}
-.cstr-switch{margin:0 0 14px;font-size:12.5px;color:var(--anatomy-muted);white-space:pre-wrap}
+.cstr-switch{margin:0 0 18px;font-size:13px;color:var(--anatomy-muted);white-space:pre-wrap}
 .cstr-switch a{color:var(--anatomy-text)}
 .cstr-switch b{font-weight:600;color:var(--anatomy-text)}
+.cstr-head{margin:0 0 22px;max-width:860px}
+.cstr-head h1{margin:0 0 6px;font-size:22px;line-height:1.25;font-weight:600;color:var(--anatomy-strong);letter-spacing:-.01em}
+.cstr-head p{margin:0;color:var(--anatomy-text)}
+.cstr-figs{display:grid;grid-template-columns:1fr;gap:28px}
+@media (min-width:1100px){.cstr-figs{grid-template-columns:1fr 1fr;gap:24px}}
+.cstr-figs .iso-figure{margin:0}
+.cstr-model{margin:18px 0 0;color:var(--anatomy-muted);font-size:13px;max-width:1100px}
 .iso-stage{outline:none}
 .iso-stage:focus-visible{box-shadow:0 0 0 1px var(--anatomy-lo)}
-.cstr-panel{margin:18px 0 0;padding:16px;box-shadow:0 0 0 1px var(--anatomy-mid);background:var(--anatomy-card);font-size:12.5px;color:var(--anatomy-text)}
-.cstr-ctls{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 18px}
+.cstr-panel{margin:22px 0 0;padding:18px;box-shadow:0 0 0 1px var(--anatomy-mid);background:var(--anatomy-card);font-size:13px;color:var(--anatomy-text);display:grid;grid-template-columns:1fr;gap:20px}
+@media (min-width:760px){.cstr-panel{grid-template-columns:minmax(220px,280px) 1fr}.cstr-chart{grid-column:1 / -1}}
+@media (min-width:1280px){.cstr-panel{grid-template-columns:minmax(230px,270px) minmax(380px,1fr) minmax(460px,1.25fr)}.cstr-chart{grid-column:auto}}
+.cstr-panel h2{margin:0 0 2px;font-size:13px;font-weight:600;color:var(--anatomy-strong)}
+.cstr-ctls{display:flex;flex-direction:column;gap:12px}
 .cstr-ctl{display:flex;flex-direction:column;gap:4px}
-.cstr-ctl span,.cstr-num b{font-weight:500;color:var(--anatomy-muted)}
+.cstr-ctl span{font-weight:500;color:var(--anatomy-muted)}
 .cstr-ctl output{color:var(--anatomy-text);font-family:var(--anatomy-mono,ui-monospace,monospace)}
 .cstr-ctl input{width:100%;accent-color:var(--cstr-series)}
-.cstr-ctl select{font:inherit;color:var(--anatomy-text);background:var(--anatomy-page);border:1px solid var(--anatomy-mid);border-radius:4px;padding:4px 6px}
-.cstr-nums{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px 18px;margin:16px 0 0;padding:14px 0 0;border-top:1px solid var(--anatomy-mid)}
-.cstr-num{display:flex;flex-direction:column;gap:2px}
-.cstr-num output{font:500 15px/1.25 var(--anatomy-mono,ui-monospace,monospace);font-variant-numeric:tabular-nums;color:var(--anatomy-text)}
-.cstr-num output[data-level="warning"]{text-decoration:underline 2px var(--cstr-warning);text-underline-offset:4px}
+.cstr-ctl select,.cstr-btns button{font:inherit;color:var(--anatomy-text);background:var(--anatomy-page);border:1px solid var(--anatomy-mid);border-radius:4px;padding:5px 8px}
+.cstr-btns{display:flex;flex-wrap:wrap;gap:8px}
+.cstr-btns button{cursor:pointer}
+.cstr-btns button:hover{border-color:var(--anatomy-text)}
+.cstr-btns button:focus-visible{outline:2px solid var(--cstr-series);outline-offset:1px}
+.cstr-cmp{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.cstr-cmp th,.cstr-cmp td{padding:5px 8px 5px 0;text-align:left;border-bottom:1px solid var(--cstr-grid);vertical-align:baseline}
+.cstr-cmp thead th{font-weight:600;color:var(--anatomy-strong)}
+.cstr-cmp tbody th{font-weight:500;color:var(--anatomy-muted)}
+.cstr-cmp output{font:500 13.5px/1.3 var(--anatomy-mono,ui-monospace,monospace);color:var(--anatomy-text);white-space:nowrap}
+.cstr-same{text-align:center!important;background:linear-gradient(90deg,transparent,var(--cstr-grid) 50%,transparent)}
+.cstr-cmp output[data-level="warning"]{text-decoration:underline 2px var(--cstr-warning);text-underline-offset:4px}
 .cstr-warn{min-height:1.4em;margin:12px 0 0;color:var(--anatomy-text)}
 .cstr-badge{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;vertical-align:-3px}
 .cstr-badge[data-level="critical"]{background:var(--cstr-critical)}
 .cstr-badge[data-level="warning"]{background:var(--cstr-warning);color:#0b0b0b}
-.cstr-chart{margin:14px 0 0}
+.cstr-chart{margin:0;min-width:0}
 .cstr-chart figcaption{color:var(--anatomy-muted);margin-bottom:6px}
 .cstr-plot{position:relative}
-.cstr-plot svg{display:block;width:100%;height:auto;background:var(--cstr-surface);font:11px ui-sans-serif,system-ui,sans-serif}
+.cstr-plot svg{display:block;width:100%;height:auto;background:var(--cstr-surface);font:12px ui-sans-serif,system-ui,sans-serif}
 .cstr-plot .grid{stroke:var(--cstr-grid);stroke-width:1}
 .cstr-plot .axis{stroke:var(--anatomy-lo);stroke-width:1}
 .cstr-plot .tick,.cstr-plot .axis-title{fill:var(--anatomy-muted)}
@@ -846,30 +334,34 @@ const CSS = `
 .cstr-plot .cross{stroke:var(--anatomy-lo);stroke-dasharray:3 3}
 .cstr-plot .cross-dot{fill:var(--cstr-surface);stroke:var(--cstr-series);stroke-width:2}
 .cstr-tip{position:absolute;pointer-events:none;background:var(--anatomy-card);box-shadow:0 0 0 1px var(--anatomy-mid),0 4px 14px rgba(0,0,0,.12);padding:6px 9px;font-size:12px;line-height:1.45;white-space:nowrap;color:var(--anatomy-text)}
+@media (max-width:600px){.cstr-plot svg{font-size:21px}}
 .cstr-chart details{margin-top:8px;color:var(--anatomy-muted)}
 .cstr-chart table{border-collapse:collapse;margin-top:6px;font-variant-numeric:tabular-nums;color:var(--anatomy-text)}
 .cstr-chart th,.cstr-chart td{padding:3px 12px 3px 0;text-align:right;border-bottom:1px solid var(--cstr-grid)}
 .cstr-chart th{font-weight:500;color:var(--anatomy-muted)}
 `;
 
-const plate = k.plateHtml({
-  fig: "Fig 2",
-  title: t("title"),
-  hint: t("hint"),
-  readout: "",
-  keys: T.keys[L],
-  caption: t("caption"),
-  body: `<div class="iso-stage" tabindex="0" role="img" aria-label="${esc(t("title"))}">${svg}</div>`,
-});
+const plate = (name, fig, mod) => `<div data-fig="${name}">${k.plateHtml({
+  fig, title: mod.text.title, hint: t("hint"), readout: "", keys: mod.text.keys, caption: mod.text.caption,
+  body: `<div class="iso-stage" tabindex="0" role="img" aria-label="${esc(mod.text.title)}">${mod.svg}</div>`,
+})}</div>`;
 // The four versions of the page link to each other.
 const variant = (pt, light) => `cstr${pt ? "-pt" : ""}${light ? "-light" : ""}.html`;
 const switcher = `<nav class="cstr-switch">${[["English", 0, theme === "light"], ["Português", 1, theme === "light"]].map(([label, pt, light]) => (pt === L ? `<b>${label}</b>` : `<a href="${variant(pt, light)}">${label}</a>`)).join(" · ")}  |  ${[[L ? "claro" : "light", true], [L ? "escuro" : "dark", false]].map(([label, light]) => (light === (theme === "light") ? `<b>${label}</b>` : `<a href="${variant(L, light)}">${label}</a>`)).join(" · ")}  |  <a href="https://github.com/aikiesan/simulador_CSTR">GitHub</a></nav>`;
-const page = k.pageHtml({ title: t("title"), theme, body: switcher + plate + panel, script: kitScript() + live, width: 820 })
+const head = `<header class="cstr-head"><h1>${esc(t("title"))}</h1><p>${esc(t("lede"))}</p></header>`;
+const body = switcher + head + `<div class="cstr-figs">${plate("farm", "Fig 1", farm)}${plate("lab", "Fig 2", lab)}</div>` + panel + `<p class="cstr-model">${esc(t("model"))}</p>`;
+const page = k.pageHtml({ title: t("title"), theme, body, script: kitScript() + live, width: 1480 })
   .replace("</style>", `${CSS}</style>`)
-  .replace('<html lang="en">', `<html lang="${lang === "pt" ? "pt-BR" : "en"}">`);
+  .replace('<html lang="en">', `<html lang="${lang === "pt" ? "pt-BR" : "en"}">`)
+  .replace("margin:64px auto 96px", "margin:40px auto 80px");
 mkdirSync(OUT, { recursive: true });
-const name = `cstr${lang === "pt" ? "-pt" : ""}${theme === "light" ? "-light" : ""}.html`;
+const name = variant(lang === "pt", theme === "light");
 writeFileSync(join(OUT, name), page);
 if (lang === "pt" && theme === "light") writeFileSync(join(OUT, "index.html"), page);
-console.log("wrote", join("site", name), `${(page.length / 1024).toFixed(0)} KB`, `${R.items.length} items`);
-A.auditOrExit(R, P);
+console.log("wrote", join("site", name), `${(page.length / 1024).toFixed(0)} KB`, `farm ${farm.R.items.length} items`, `lab ${lab.R.items.length} items`);
+if (process.argv.includes("--audit")) {
+  console.log("── audit: Fig 1, farm ──");
+  A.auditOrExit(farm.R, farm.P);
+  console.log("── audit: Fig 2, bench ──");
+  A.auditOrExit(lab.R, lab.P);
+}

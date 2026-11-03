@@ -1,6 +1,6 @@
 # Simulador CSTR
 
-Um biodigestor de mistura completa (CSTR) cortado ao meio, animado e interativo, para entender como ele funciona por dentro.
+Um biodigestor de mistura completa (CSTR) cortado ao meio, animado e interativo, em **duas escalas**: o tanque de 520 m³ da fazenda (Fig 1) e um reator de bancada de 5 L (Fig 2). Na tela larga as duas figuras ficam lado a lado; no celular, uma embaixo da outra. Um só painel e um só relógio comandam as duas.
 
 **Abrir:** https://aikiesan.github.io/simulador_CSTR/ (português, claro). Pela barra do topo dá para trocar para inglês ou para o tema escuro.
 
@@ -18,6 +18,21 @@ Um tanque de 520 m³ com esterco de gado leiteiro, numa bancada:
 - contêiner do motor (CHP) com dry cooler e silencioso;
 - tubos de aquecimento (ida e volta);
 - flare.
+
+## A escala de bancada (Fig 2)
+
+Um reator de vidro encamisado de 5 L (diâmetro interno 180 mm, 196,5 mm de líquido), cortado como o tanque:
+
+- vidro com camisa de água (o corte mostra vidro, água e vidro; a água acende quando o banho aquece), anel de apoio, flange, tampa de inox com braçadeira e quatro portas (alimentação, sensor de temperatura, gás, amostragem);
+- agitador mecânico num suporte universal (base, haste, mufa, braço), eixo e impelidor de pás inclinadas;
+- banho termostático com visor da temperatura, ligado à camisa por duas mangueiras;
+- frasco de alimentação num agitador magnético e bomba peristáltica com timer (o rotor gira quando bombeia, o visor mostra o tempo até a próxima alimentação);
+- braço de transbordo no nível do líquido até o frasco de efluente (os níveis dos dois frascos sobem e descem);
+- medidor de gás de tambor (ponteiro de 100 mL por volta e contador) e bolsa de amostragem de 10 L que enche e é esvaziada para análise.
+
+A cinética é a mesma do tanque (`steady(plant, volume)`): no mesmo TRH, temperatura e ST, os dois atingem a mesma fração do B₀ e produzem o mesmo metano por m³ de reator; a bancada produz cerca de 104 000 vezes menos no total. O que muda com a escala é o resto: 5 L esquentam e esfriam em uma ou duas horas (o banho liga e desliga muito mais vezes), a alimentação é em quatro pulsos por dia com bomba de 2 mL/min, e o gás é medido em mL. Esses números da bancada (volume, bomba, pulsos, bolsa, constante térmica) estão em `LAB`, em `src/model.mjs`, e são escolhas de desenho didático, não de um reator real específico.
+
+O painel mostra as duas escalas lado a lado; o gráfico é uma só curva com dois eixos (fazenda em Nm³ CH₄/d à esquerda, bancada em NL CH₄/d à direita). Os botões **Alimentar agora** (ou tecla F) e **Esvaziar a bolsa de gás** agem na hora.
 
 ## O que se mexe
 
@@ -63,14 +78,18 @@ Abra `site/index.html` no navegador.
 ## Estrutura
 
 ```text
-src/model.mjs      o modelo: cinética, dimensões da planta, energia
+src/model.mjs      o modelo: cinética (para qualquer volume), dimensões das duas plantas, energia
 src/shell.mjs      as membranas da cobertura, desenhadas em facetas (rodam também na página)
-src/build.mjs      a geometria, a animação, o painel e o gráfico; gera site/
+src/kit.mjs        carrega o kit Anatomy, o idioma e o tema
+src/parts.mjs      as peças comuns (caixas, cilindros, peças torneadas, flanges, tubos) que registram a forma real para a auditoria
+src/farm.mjs       Fig 1: a geometria e a animação do tanque da fazenda
+src/lab.mjs        Fig 2: a geometria e a animação do reator de bancada
+src/build.mjs      a página larga, o painel, o gráfico e o relógio comum; confere o modelo e gera site/
 vendor/anatomy/    o kit de desenho isométrico Anatomy (MIT), copiado da versão em VERSION
 .github/workflows/ o deploy no GitHub Pages: gera, audita e publica a cada push na main
 ```
 
-A auditoria (`--audit`) confere, a partir das formas reais, que nenhum tubo atravessa nada, que todo flange assenta numa face, que nada flutua e que tudo é desenhado na ordem certa de profundidade. Se ela falhar, o GitHub Actions não publica.
+A auditoria (`--audit`) roda nas duas figuras e confere, a partir das formas reais, que nenhum tubo atravessa nada, que todo flange assenta numa face, que nada flutua e que tudo é desenhado na ordem certa de profundidade. Se ela falhar, o GitHub Actions não publica.
 
 ## Créditos
 
