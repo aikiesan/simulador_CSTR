@@ -64,6 +64,7 @@ const U = {
     biogasIn: "Biogás produzido", biogasOut: "Consumo do motor", pumping: "bombeando", waiting: "aguardando", perDay: "Por dia", pulse: "Cada alimentação",
     methane: "Metano no biogás", toEngine: "Para o motor", power: "Potência", uses: "Consumo de gás ligado", burning: "queimando", flowing: "escoando",
     heating: "aquecendo", bottle: "Na garrafa", counted: "Contado", turns: "Ponteiro", capacity: "Capacidade",
+    foam: "Espuma", none: "nenhuma",
     left: "SV degradável restante (S)", biomass: "Biomassa ativa (b)", converted: "SV já convertido", pulseVol: "Volume por pulso", next: "Próximo pulso em",
   },
   partsTitle: "Peças, uma a uma", numbers: "Números no desenho", zoomOut: "Ver o conjunto",
@@ -193,6 +194,20 @@ const TOPICS = ${JSON.stringify({ farm: topics("farm"), lab: topics("lab") })};
 const BADGES = ${JSON.stringify(BADGES)};
 const DATA = { farm: ${JSON.stringify(farm.data)}, lab: ${JSON.stringify(lab.data)} };
 const clockText = (h) => { const day = Math.floor(h / 24) + 1, hh = Math.floor(h % 24), mm = Math.floor((h * 60) % 60); return "Dia " + day + " · " + String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
+// The colour of the slurry from the degradable VS left in it (kg/m³ = g/L), against the design feed's: light and grey
+// when digested, dark brown when raw. A picture, not a measurement. Cached per element so the style changes only when it shows.
+const S_RAW = DESIGN.ts * FEED.vsOfTs * 1000;
+function paintSlurry(el, S) {
+  if (!el) return;
+  const t = Math.round(Math.pow(clamp(S / S_RAW, 0, 1), 0.7) * 100) / 100;
+  if (el.dataset.tone === String(t)) return;
+  el.dataset.tone = t;
+  const u = t, base = [196, 186, 168].map((v, i) => v + ([104, 86, 60][i] - v) * u);
+  const rgb = (d) => "rgb(" + base.map((v) => Math.round(clamp(v + d, 0, 255))).join(",") + ")";
+  el.style.setProperty("--cstr-slurry", rgb(0));
+  el.style.setProperty("--cstr-slurry-top", rgb(16));
+  el.style.setProperty("--cstr-slurry-dark", rgb(-34));
+}
 // Hours a timer that runs len hours every per hours is on between t0 and t1.
 function onHours(t0, t1, per, len) { let s = 0; for (let k = Math.floor(t0 / per); k * per < t1; k++) { const a = Math.max(t0, k * per), b = Math.min(t1, k * per + len); if (b > a) s += b - a; } return s; }
 ${farm.live}
@@ -305,6 +320,9 @@ const CSS = `
 .cstr-chart th{font-weight:500;color:var(--anatomy-muted)}
 .cstr-btns button[aria-pressed="true"]{background:var(--anatomy-strong);color:var(--anatomy-page);border-color:var(--anatomy-strong)}
 .iso-plate-corner{font-size:13px}
+.cstr-foam{fill:#f3eee3;stroke:none}
+.cstr-foam[data-face="top"]{fill:#faf7f0}
+.cstr-foam-dots circle{fill:#fffdf8;stroke:var(--anatomy-lo);stroke-width:.25}
 @media (max-width:560px){.iso-plate{padding-bottom:92px}.iso-plate-corner[data-corner="readout"]{left:0;white-space:normal;text-align:right;line-height:1.35}.iso-plate-corner[data-corner="hint"]{bottom:44px}}
 .cstr-top{display:flex;justify-content:flex-end;margin:0 0 6px;font-size:13px}
 .cstr-top a{color:var(--anatomy-muted)}
