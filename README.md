@@ -78,3 +78,7 @@ A auditoria (`--audit`) confere, a partir das formas reais, que nenhum tubo atra
 - Parâmetros do substrato: CP2b / [PILAR-2b](https://cp2b.unicamp.br/pilar2b/pt-BR), NIPE-UNICAMP.
 - Chen, Y. R.; Hashimoto, A. G. (1978). Kinetics of methane fermentation. *Biotechnology and Bioengineering Symposium* 8, 269–282.
 - Hashimoto, A. G. (1982). Methane from cattle waste: effects of temperature, hydraulic retention time, and influent substrate concentration on kinetic parameter (K). *Biotechnology and Bioengineering* 24(9), 2039–2052.
+
+## Licença
+
+MIT (`LICENSE`). O kit em `vendor/anatomy` tem a sua própria licença MIT (`vendor/anatomy/LICENSE`).
