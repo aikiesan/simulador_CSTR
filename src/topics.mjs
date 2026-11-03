@@ -15,14 +15,25 @@ const PREFIXES = {
   ],
   lab: [
     ["bag", ["gas.bag", "bag"]],
-    ["meter", ["gas.tube", "meter"]],
+    ["gastube", ["gas.tube"]],
+    ["meter", ["meter"]],
     ["vessel", ["vessel"]],
     ["jacket", ["jacket"]],
-    ["circ", ["circ", "hose"]],
-    ["stirrer", ["stirrer", "stand.base", "stand.socket", "stand.rod", "stand.boss", "stand.arm"]],
-    ["lid", ["lid", "probe"]],
-    ["feed", ["pump", "feed", "feedstir"]],
-    ["effluent", ["effluent"]],
+    ["circ", ["circ"]],
+    ["hoses", ["hose"]],
+    ["impeller", ["stirrer.shaft"]],
+    ["motor", ["stirrer"]],
+    ["stand", ["stand.base", "stand.socket", "stand.rod", "stand.boss", "stand.arm"]],
+    ["probe", ["probe", "lid.probe"]],
+    ["feedport", ["lid.feed"]],
+    ["gasport", ["lid.gas"]],
+    ["sample", ["lid.sample"]],
+    ["pump", ["pump"]],
+    ["tubing", ["feed.suck", "feed.in"]],
+    ["feedbottle", ["feed.bottle", "feed.cap"]],
+    ["magstir", ["feedstir"]],
+    ["overflow", ["effluent.arm", "effluent.drop"]],
+    ["effbottle", ["effluent.bottle", "effluent.cap"]],
   ],
 };
 
@@ -113,78 +124,208 @@ const T = {
       "Na bancada, um braço lateral deixa o efluente pingar numa garrafa, que é amostrada para sólidos, pH e ácidos.",
     ],
   },
+  // The bench reactor, part by part, in the order a reader would follow it: the vessel, how it is mixed and heated,
+  // how feed goes in and effluent out, and how the gas is measured. Sizes are as drawn: a typical 5 L set-up, not a product.
   lab: {
     vessel: [
-      "Jacketed glass vessel", "Reator de vidro encamisado",
-      "Borosilicate glass, 180 mm across inside, with the liquid 196.5 mm deep: 5.0 L. A flanged lid is clamped and sealed so no air gets in and no gas gets out.",
-      "Vidro borossilicato, 180 mm de diâmetro interno, com o líquido a 196,5 mm de profundidade: 5,0 L. Uma tampa flangeada é presa e vedada para que não entre ar nem saia gás.",
-      "The glass is the point: you can see foaming, scum and settling that the farm tank hides.",
-      "O vidro é o ponto: dá para ver espuma, crosta e sedimentação que o tanque da fazenda esconde.",
-    ],
-    slurry: [
-      "Reactor liquid", "Líquido do reator",
-      "Inoculum from a running digester, fed with the same manure at the same solids. The bench runs the same kinetics as the farm tank.",
-      "Inóculo de um digestor em operação, alimentado com o mesmo esterco e os mesmos sólidos. A bancada roda a mesma cinética do tanque da fazenda.",
-      "Same HRT, temperature and feed: same share of B₀ and same methane per m³ of reactor as the farm tank.",
-      "Mesmo TRH, temperatura e alimentação: mesma fração do B₀ e mesmo metano por m³ de reator que o tanque da fazenda.",
+      "Glass vessel", "Vaso de vidro",
+      "The reactor itself: a borosilicate glass cylinder, flanged at the top. The liquid is held at a fixed depth by the overflow arm, so its volume never changes; the space above it is the headspace where the gas collects before it leaves.",
+      "O reator em si: um cilindro de vidro borossilicato, flangeado no topo. O líquido fica numa profundidade fixa, mantida pelo braço de extravasamento, então o volume nunca muda; o espaço acima é o headspace, onde o gás se junta antes de sair.",
+      "Through the glass you see what a steel tank hides: foam, a floating scum when the stirrer stops, sediment at the bottom.",
+      "Pelo vidro se vê o que um tanque de aço esconde: espuma, crosta flutuando quando o agitador para, sedimento no fundo.",
+      [["Inside diameter", "Diâmetro interno", "180 mm", "180 mm"], ["Liquid depth", "Profundidade do líquido", "196.5 mm", "196,5 mm"], ["Working volume", "Volume útil", "5.0 L", "5,0 L"], ["Headspace", "Headspace", "≈ 2.2 L", "≈ 2,2 L"], ["Glass wall", "Parede de vidro", "4 mm", "4 mm"]],
     ],
     jacket: [
       "Water jacket", "Camisa d’água",
-      "Warm water flows between two glass walls, all around the liquid, so the reactor heats evenly from every side.",
-      "Água morna circula entre duas paredes de vidro, em volta de todo o líquido, e o reator aquece por igual de todos os lados.",
-      "5 L warms and cools in an hour or two, where the farm tank takes days. Try “heating fails” and compare the two temperature traces.",
-      "5 L aquece e esfria em uma ou duas horas; o tanque da fazenda leva dias. Teste “falha no aquecimento” e compare as duas curvas de temperatura.",
+      "A second glass wall around the first, with warm water flowing in the gap. The water enters at the bottom and leaves at the top, so no air is trapped, and the whole wetted wall heats the liquid evenly.",
+      "Uma segunda parede de vidro em volta da primeira, com água morna circulando no vão. A água entra por baixo e sai por cima, para não prender ar, e toda a parede molhada aquece o líquido por igual.",
+      "The section turns warm-coloured while the circulator heats. With “heating fails” the liquid cools in hours.",
+      "O corte fica alaranjado enquanto o banho aquece. Com “falha no aquecimento” o líquido esfria em horas.",
+      [["Water gap", "Vão de água", "14 mm", "14 mm"], ["Outside diameter", "Diâmetro externo", "224 mm", "224 mm"], ["Flow", "Fluxo", "in low, out high", "entra embaixo, sai em cima"]],
+    ],
+    slurry: [
+      "Reactor liquid", "Líquido do reator",
+      "Inoculum from a running digester, fed with diluted dairy manure. Two things in it decide everything: the degradable solids still left (S) and the active microbes that eat them (b). Both are drawn on the run charts below.",
+      "Inóculo de um digestor em operação, alimentado com esterco leiteiro diluído. Duas coisas nele decidem tudo: os sólidos degradáveis que restam (S) e os microrganismos ativos que os consomem (b). As duas aparecem nos gráficos da corrida, abaixo.",
+      "Each feed raises S for a while and the gas rate jumps; then the microbes bring S back down. Start a run from little inoculum to watch b grow.",
+      "Cada alimentação eleva S por um tempo e a vazão de gás salta; depois os microrganismos baixam S de novo. Comece uma corrida com pouco inóculo para ver b crescer.",
+      [["Volume", "Volume", "5.0 L", "5,0 L"], ["Feed solids", "Sólidos na alimentação", "set in the panel", "ajustados no painel"]],
+    ],
+    impeller: [
+      "Shaft and impeller", "Haste e impelidor",
+      "A stainless shaft carries a four-blade impeller, pitched at 45° so it pushes liquid down and around. It sits about a third of the way up the liquid, where it lifts settled solids and pulls down the scum.",
+      "Uma haste de inox leva um impelidor de quatro pás, inclinadas a 45° para empurrar o líquido para baixo e em volta. Fica a cerca de um terço da altura do líquido, onde levanta o sedimento e puxa a crosta para baixo.",
+      "The blades turn in the open wedge only while the stirrer runs; scum and sediment fade as it mixes.",
+      "As pás giram na fatia aberta só quando o agitador funciona; crosta e sedimento somem com a mistura.",
+      [["Impeller diameter", "Diâmetro do impelidor", "78 mm (0.43 of the vessel)", "78 mm (0,43 do vaso)"], ["Height above the floor", "Altura acima do fundo", "54 mm", "54 mm"], ["Blades", "Pás", "4, at 45°", "4, a 45°"], ["Shaft", "Haste", "6 mm", "6 mm"]],
+    ],
+    lid: [
+      "Lid, flange and clamp", "Tampa, flange e braçadeira",
+      "A flat stainless lid on the glass flange, sealed with a gasket and held by a ring clamp. Everything that enters or leaves the reactor, except the effluent, goes through it, and a centre seal lets the shaft turn without letting gas out.",
+      "Uma tampa plana de inox sobre o flange de vidro, vedada com junta e presa por uma braçadeira. Tudo o que entra ou sai do reator, menos o efluente, passa por ela, e um selo central deixa a haste girar sem deixar o gás escapar.",
+      "A leak here is the commonest bench failure: gas escapes, the meter counts less, and air gets in.",
+      "Um vazamento aqui é a falha mais comum na bancada: o gás escapa, o medidor conta menos e entra ar.",
+      [["Flange diameter", "Diâmetro do flange", "252 mm", "252 mm"], ["Lid thickness", "Espessura da tampa", "10.5 mm", "10,5 mm"], ["Ports", "Portas", "4 + shaft seal", "4 + selo da haste"]],
+    ],
+    feedport: [
+      "Feed port", "Porta de alimentação",
+      "Where the feed tube enters the lid. Each pulse of the pump drops fresh manure into the liquid.",
+      "Onde o tubo de alimentação entra na tampa. Cada pulso da bomba despeja esterco fresco no líquido.",
+      "Its tube shows dashes while the pump runs.",
+      "O tubo mostra tracejado enquanto a bomba funciona.",
+      [["Neck", "Gargalo", "19 mm", "19 mm"]],
+    ],
+    probe: [
+      "Temperature probe", "Sonda de temperatura",
+      "A sensor in a thin sheath dipping into the liquid. It reports the liquid's temperature to the circulator, which heats until it reads the set point.",
+      "Um sensor numa bainha fina mergulhada no líquido. Informa a temperatura do líquido ao banho, que aquece até ler a temperatura ajustada.",
+      "Its reading is the temperature on the circulator's display and on the run chart.",
+      "A leitura dela é a temperatura do visor do banho e do gráfico da corrida.",
+      [["Sheath", "Bainha", "6 mm", "6 mm"], ["Control band", "Faixa de controle", "± 0.1 °C", "± 0,1 °C"]],
+    ],
+    gasport: [
+      "Gas outlet", "Saída de gás",
+      "The only way out for the gas: from the headspace, through the lid, to the gas meter.",
+      "A única saída do gás: do headspace, pela tampa, até o medidor de gás.",
+      "Its tube shows dashes whenever gas is flowing.",
+      "O tubo mostra tracejado sempre que há gás passando.",
+      [["Neck", "Gargalo", "19 mm", "19 mm"]],
+    ],
+    sample: [
+      "Sampling port", "Porta de amostragem",
+      "A port closed by a rubber septum: a syringe takes a few millilitres of liquid without letting air in. Samples are analysed for pH, volatile acids, solids and ammonia.",
+      "Uma porta fechada por um septo de borracha: uma seringa retira alguns mililitros de líquido sem deixar entrar ar. As amostras vão para análise de pH, ácidos voláteis, sólidos e amônia.",
+      "The model's residual solids (S) are what a solids analysis of a sample would track.",
+      "Os sólidos residuais do modelo (S) são o que a análise de sólidos de uma amostra acompanharia.",
+      [["Neck", "Gargalo", "14 mm", "14 mm"], ["Closure", "Fechamento", "septum cap", "tampa com septo"]],
+    ],
+    motor: [
+      "Stirrer motor", "Motor do agitador",
+      "An overhead motor with a chuck that grips the shaft. A knob sets the speed; a timer runs it 15 minutes each hour, like the farm mixer.",
+      "Um motor de haste com mandril que prende a haste. Um botão ajusta a velocidade; um temporizador o faz rodar 15 minutos por hora, como o agitador da fazenda.",
+      "Switch the mixers off in the panel: the scum and sediment build up on the cut faces.",
+      "Desligue os agitadores no painel: crosta e sedimento se formam nas faces do corte.",
+      [["Body", "Corpo", "51 mm × 114 mm", "51 mm × 114 mm"], ["Duty", "Regime", "15 min each hour (auto)", "15 min por hora (auto)"]],
+    ],
+    stand: [
+      "Lab stand", "Suporte de laboratório",
+      "A heavy base, a vertical rod and a boss clamp with an arm: it holds the motor exactly above the vessel so the shaft runs straight through the seal.",
+      "Uma base pesada, uma haste vertical e uma mufa com braço: segura o motor exatamente sobre o vaso, para que a haste passe reta pelo selo.",
+      "If the shaft is not centred, the seal wears and starts to leak.",
+      "Se a haste não estiver centrada, o selo se desgasta e começa a vazar.",
+      [["Rod", "Haste", "11 mm × 600 mm", "11 mm × 600 mm"], ["Base", "Base", "102 × 72 mm", "102 × 72 mm"]],
     ],
     circ: [
       "Heating circulator", "Banho termostatizado",
-      "A water bath with a heater, a pump and a thermostat. It pumps water through the jacket and back; its display shows the temperature.",
-      "Um banho com resistência, bomba e termostato. Bombeia água pela camisa e de volta; o visor mostra a temperatura.",
-      "It switches on and off many times an hour; the farm heating cycles over days.",
-      "Liga e desliga várias vezes por hora; o aquecimento da fazenda cicla ao longo de dias.",
+      "A water bath with a heater, a pump and a controller. It pumps warm water through the jacket and back, switching the heater on and off to hold the probe at the set point. Its display shows the temperature.",
+      "Um banho com resistência, bomba e controlador. Bombeia água morna pela camisa e de volta, ligando e desligando a resistência para manter a sonda na temperatura ajustada. O visor mostra a temperatura.",
+      "Its lamp shows when it heats: it cycles many times an hour, where the farm's heating cycles over days.",
+      "A lâmpada mostra quando aquece: cicla várias vezes por hora, enquanto o aquecimento da fazenda cicla ao longo de dias.",
+      [["Footprint", "Base", "138 × 120 mm", "138 × 120 mm"], ["Height", "Altura", "168 mm", "168 mm"]],
     ],
-    stirrer: [
-      "Overhead stirrer", "Agitador de haste",
-      "A motor on a stand turns a shaft through a gas-tight gland in the lid, down to a four-blade impeller pitched at 45°. In auto it runs 15 minutes each hour, like the farm mixer.",
-      "Um motor num suporte gira uma haste que atravessa um selo estanque na tampa até um impelidor de quatro pás inclinadas a 45°. No automático roda 15 minutos por hora, como o agitador da fazenda.",
-      "In 5 L the impeller reaches the whole volume; that is the ideal of a completely mixed reactor that the model assumes.",
-      "Em 5 L o impelidor alcança todo o volume: é o ideal de mistura completa que o modelo supõe.",
+    hoses: [
+      "Jacket hoses", "Mangueiras da camisa",
+      "Two hoses on barbed fittings: flow from the circulator to the bottom of the jacket, return from the top of the jacket back to the bath.",
+      "Duas mangueiras em conexões de espiga: ida do banho até o fundo da camisa, volta do alto da camisa até o banho.",
+      "The water circulates all the time; only the heater switches.",
+      "A água circula o tempo todo; só a resistência liga e desliga.",
+      [["Outside diameter", "Diâmetro externo", "10 mm", "10 mm"]],
     ],
-    lid: [
-      "Lid and ports", "Tampa e portas",
-      "Four ports through the lid: feed in, a temperature probe that tells the circulator what to do, gas out, and a sampling port with a septum cap for a syringe.",
-      "Quatro portas na tampa: entrada da alimentação, uma sonda de temperatura que comanda o banho, saída de gás e uma porta de amostragem com septo para seringa.",
-      "Sampling a few millilitres is trivial here; at the farm, samples come from a valve on the wall.",
-      "Amostrar alguns mililitros é trivial aqui; na fazenda, as amostras saem de uma válvula na parede.",
+    pump: [
+      "Peristaltic pump", "Bomba peristáltica",
+      "Three rollers squeeze a soft tube against the pump head, pushing a fixed volume per turn. The feed never touches the pump, and nothing flows back when it stops. A timer runs it four times a day; its display counts down to the next feed.",
+      "Três roletes apertam um tubo macio contra o cabeçote, empurrando um volume fixo por volta. A alimentação nunca toca a bomba, e nada volta quando ela para. Um temporizador a liga quatro vezes por dia; o visor conta o tempo até a próxima alimentação.",
+      "The rotor turns while it pumps. Each pulse lasts minutes; “overfeed for a day” doubles them.",
+      "O rotor gira enquanto bombeia. Cada pulso dura minutos; “sobrecarga por um dia” os dobra.",
+      [["Rate", "Vazão", "2 mL/min", "2 mL/min"], ["Pulses", "Pulsos", "4 a day", "4 por dia"], ["Head", "Cabeçote", "38 mm, 3 rollers", "38 mm, 3 roletes"]],
     ],
-    feed: [
-      "Peristaltic feed pump", "Bomba peristáltica",
-      "Rollers squeeze a tube, so the feed never touches the pump. On a timer it pumps at 2 mL/min four times a day from a bottle kept stirred on a magnetic stirrer. Its display counts down to the next feed.",
-      "Roletes apertam um tubo, então a alimentação nunca toca a bomba. Num temporizador, bombeia 2 mL/min quatro vezes por dia, de uma garrafa mantida agitada num agitador magnético. O visor conta o tempo até a próxima alimentação.",
-      "The farm pumps cubic metres eight times a day; the share of the volume fed each day is the same.",
-      "A fazenda bombeia metros cúbicos oito vezes por dia; a fração do volume alimentada por dia é a mesma.",
+    tubing: [
+      "Feed tubing", "Tubos de alimentação",
+      "Thin tubing from the feed bottle through the pump head and up into the feed port.",
+      "Tubo fino da garrafa de alimentação, pelo cabeçote da bomba, até a porta de alimentação.",
+      "Manure solids can clog it: one reason bench feeds are diluted or sieved.",
+      "Os sólidos do esterco podem entupi-lo: um dos motivos para diluir ou peneirar a alimentação na bancada.",
+      [["Outside diameter", "Diâmetro externo", "5 mm", "5 mm"]],
     ],
-    effluent: [
-      "Overflow and effluent bottle", "Extravasor e garrafa de efluente",
-      "A side arm at the liquid level lets out what each feed pushes in. The bottle is emptied for analysis: solids, pH, volatile acids.",
-      "Um braço lateral no nível do líquido deixa sair o que cada alimentação empurra para dentro. A garrafa é esvaziada para análise: sólidos, pH, ácidos voláteis.",
-      "The same overflow principle as the farm tank, at the scale of drops.",
-      "O mesmo princípio de extravasor do tanque da fazenda, na escala de gotas.",
+    feedbottle: [
+      "Feed bottle", "Garrafa de alimentação",
+      "Holds the next days of feed. It is refilled before it runs dry; in real work it is kept cold so the feed does not start digesting in the bottle.",
+      "Guarda os próximos dias de alimentação. É reabastecida antes de esvaziar; na prática fica refrigerada para a alimentação não começar a digerir na garrafa.",
+      "Its level falls with every feed and jumps when it is refilled.",
+      "O nível cai a cada alimentação e sobe quando é reabastecida.",
+      [["Diameter", "Diâmetro", "75 mm", "75 mm"], ["Refilled to", "Reabastecida até", "360 mL", "360 mL"]],
+    ],
+    magstir: [
+      "Magnetic stirrer", "Agitador magnético",
+      "A stir bar spun by a magnet under the bottle keeps the manure solids in suspension, so every pulse delivers the same feed.",
+      "Uma barra magnética girada por um ímã sob a garrafa mantém os sólidos do esterco em suspensão, para cada pulso entregar a mesma alimentação.",
+      "Without it the solids settle and the reactor gets dilute feed first, then a thick one.",
+      "Sem ele os sólidos assentam e o reator recebe primeiro alimentação diluída, depois grossa.",
+      [["Footprint", "Base", "96 × 90 mm", "96 × 90 mm"]],
+    ],
+    overflow: [
+      "Overflow side arm", "Braço de extravasamento",
+      "A glass arm at the liquid level: whatever a feed adds above that level runs out. It fixes the volume, and so the retention time.",
+      "Um braço de vidro na altura do líquido: o que uma alimentação acrescenta acima desse nível escorre para fora. Ele fixa o volume e, com isso, o tempo de retenção.",
+      "It drips only during and just after a feed: the same volume out as in.",
+      "Pinga só durante e logo depois de uma alimentação: sai o mesmo volume que entra.",
+      [["Bore", "Diâmetro", "9 mm", "9 mm"], ["Height", "Altura", "at the liquid level", "no nível do líquido"]],
+    ],
+    effbottle: [
+      "Effluent bottle", "Garrafa de efluente",
+      "Collects the effluent (the bench digestate). It is weighed and analysed, then emptied.",
+      "Coleta o efluente (o digestato da bancada). É pesado e analisado, depois esvaziado.",
+      "Effluent volume is logged each day, next to the feed, to check the volume balance.",
+      "O volume de efluente é anotado todo dia, ao lado da alimentação, para conferir o balanço de volume.",
+      [["Diameter", "Diâmetro", "63 mm", "63 mm"]],
+    ],
+    gastube: [
+      "Gas tubing", "Tubo de gás",
+      "Gas-tight tubing from the gas outlet over to the gas meter.",
+      "Tubo estanque a gás, da saída de gás até o medidor.",
+      "Any leak here makes the measured gas too low.",
+      "Qualquer vazamento aqui faz o gás medido sair baixo.",
+      [["Outside diameter", "Diâmetro externo", "5 mm", "5 mm"]],
     ],
     meter: [
       "Drum gas meter", "Medidor de gás de tambor",
-      "Gas turns a drum: each turn of the needle is 100 mL, and the counter adds them up. At the bench gas is counted, not estimated.",
-      "O gás gira um tambor: cada volta do ponteiro são 100 mL, e o contador soma. Na bancada o gás é contado, não estimado.",
-      "Biogas at the bench is a few litres a day; the farm makes hundreds of cubic metres. The same methane per m³ of reactor.",
-      "Na bancada são poucos litros de biogás por dia; a fazenda faz centenas de metros cúbicos. O mesmo metano por m³ de reator.",
+      "Gas turns a drum of fixed volume: each turn of the needle is 100 mL, and the counter adds them up. This is the bench's main measurement: gas volume against time.",
+      "O gás gira um tambor de volume fixo: cada volta do ponteiro são 100 mL, e o contador soma. É a medida principal da bancada: volume de gás contra o tempo.",
+      "The counter is the cumulative gas; its rate is the gas-rate chart below.",
+      "O contador é o gás acumulado; a vazão dele é o gráfico de vazão abaixo.",
+      [["Per turn", "Por volta", "100 mL", "100 mL"], ["Drum", "Tambor", "66 mm", "66 mm"]],
     ],
     bag: [
       "Gas sampling bag", "Bolsa de amostragem de gás",
-      "Collects the counted gas for composition analysis (methane, CO₂, H₂S). When it is full it is taken away and emptied; “empty the gas bag” does it now.",
-      "Coleta o gás medido para análise de composição (metano, CO₂, H₂S). Quando enche, é retirada e esvaziada; “esvaziar a bolsa de gás” faz isso agora.",
-      "The farm stores gas under its roof to feed an engine; the bench only keeps it to analyse it.",
-      "A fazenda armazena gás sob a cobertura para alimentar o motor; a bancada só o guarda para analisar.",
+      "Collects the counted gas for composition analysis (methane, CO₂, H₂S). When it is full it is taken away and emptied.",
+      "Coleta o gás medido para análise de composição (metano, CO₂, H₂S). Quando enche, é retirada e esvaziada.",
+      "The model assumes 60 % methane; the bag is how a lab checks that.",
+      "O modelo supõe 60 % de metano; a bolsa é como o laboratório confere isso.",
+      [["Capacity", "Capacidade", "10 L", "10 L"]],
     ],
   },
 };
 
-export const topics = (fig) => Object.entries(T[fig]).map(([key, v]) => ({ key, name: v[L], what: v[2 + L], scale: v[4 + L] }));
+// Each part's name, what it is for, its note, and its sizes (lab only), in the page's language.
+export const topics = (fig) => Object.entries(T[fig]).map(([key, v]) => ({
+  key, name: v[L], what: v[2 + L], scale: v[4 + L], specs: (v[6] || []).map((r) => [r[L], r[2 + L]]),
+}));
+
+// Number badges for the drawing: start on each part's anchor and push apart until no two are closer than gap
+// (viewBox units), each pulled back toward its anchor. Returns { key: { at: [x, y], badge: [x, y] } }.
+export function badgesFor(anchors, gap = 17) {
+  const keys = Object.keys(anchors);
+  const pos = Object.fromEntries(keys.map((k) => [k, [...anchors[k]]]));
+  for (let it = 0; it < 300; it++) {
+    for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
+      const a = pos[keys[i]], b = pos[keys[j]];
+      let dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy);
+      if (d >= gap) continue;
+      if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
+      const push = (gap - d) / 2 + 0.01;
+      a[0] -= (dx / d) * push; a[1] -= (dy / d) * push; b[0] += (dx / d) * push; b[1] += (dy / d) * push;
+    }
+    for (const k of keys) { pos[k][0] += (anchors[k][0] - pos[k][0]) * 0.02; pos[k][1] += (anchors[k][1] - pos[k][1]) * 0.02; }
+  }
+  return Object.fromEntries(keys.map((k) => [k, { at: anchors[k], badge: pos[k].map((v) => +v.toFixed(1)) }]));
+}
