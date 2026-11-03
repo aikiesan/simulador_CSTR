@@ -4,6 +4,7 @@
 // World: 1 unit = 3 mm, so the 180 mm vessel is 60 units across. lab.R is recorded for the audit; lab.live moves it.
 import { k, G, A, L, DEG } from "./kit.mjs";
 import { partsFor } from "./parts.mjs";
+import { wrapItems } from "./topics.mjs";
 import * as M from "./model.mjs";
 
 const WIDTH = 720;
@@ -92,10 +93,12 @@ function wall([a0, a1], r0, r1, z0, z1, { outer = false, ends = [] } = {}) {
   }
   let faces = "";
   for (const t of ends) {
+    faces += '<g data-topic="jacket">';
     if (r1 > JACKET[1]) {
       faces += `<path data-part="jacket" class="cstr-heat" d="${onCut(t, [[JACKET[0], Math.max(z0, Z0 + GLASS)], [JACKET[1], Math.max(z0, Z0 + GLASS)], [JACKET[1], Math.min(z1, JTOP - GLASS)], [JACKET[0], Math.min(z1, JTOP - GLASS)]])}"/>`;
       faces += Ln(onCut(t, [[JACKET[0], Math.max(z0, Z0 + GLASS)], [JACKET[1], Math.max(z0, Z0 + GLASS)], [JACKET[1], Math.min(z1, JTOP - GLASS)], [JACKET[0], Math.min(z1, JTOP - GLASS)]]), { tone: "lo" });
     }
+    faces += "</g>";
   }
   return S(k.extrude(ring, z0, z1 - z0, P, { convex: false }), { tone: "hi", crease: "faint", inner }) + faces;
 }
@@ -139,22 +142,24 @@ function vessel() {
   out.push(S(k.cylinder(0, 0, RO, Z0, ZF - Z0, P, 96, 0.6), { tone: "hi" }));
   out.push(wall(FAR, RI, RO, ZF, JTOP));
   out.push(wall(FAR, RI, RI + GLASS, JTOP, FL[0]));
-  out.push(liquid());
+  out.push(`<g data-topic="slurry">${liquid()}</g>`);
   // The near walls, their cut faces showing the glass, the water in the jacket and the glass again.
   out.push(wall(NEAR_L, RI, RO, ZF, JTOP, { outer: true, ends: [CUT[1]] }), wall(NEAR_L, RI, RI + GLASS, JTOP, FL[0]));
   out.push(wall(NEAR_R, RI, RO, ZF, JTOP, { outer: true, ends: [CUT[0] + 2 * Math.PI] }), wall(NEAR_R, RI, RI + GLASS, JTOP, FL[0]));
   // Jacket shoulder, flange, lid and clamp.
   out.push(S(k.extrude(arcRing(RI + GLASS, RO, KEPT[0], KEPT[1], 72), JTOP, 0.01, P, { convex: false }), { tone: "hi", flat: true }));
   out.push(S(k.extrude(arcRing(RI, FLANGE_R, KEPT[0], KEPT[1], 72), FL[0], FL[1] - FL[0], P, { convex: false, bevel: 0.3 }), { tone: "hi" }));
-  out.push(lid());
+  out.push('<g data-topic="lid">', lid());
   out.push(S(k.extrude(arcRing(CLAMP[0], CLAMP[1], KEPT[0] + 0.05, KEPT[1] - 0.05, 72), CLAMP[2], CLAMP[3] - CLAMP[2], P, { convex: false, bevel: 0.3 }), { tone: "mid" }));
+  out.push("</g>");
   // Centre hub with the gland, the shaft down to the impeller hub, and the impeller's live slot.
+  out.push('<g data-topic="stirrer">');
   out.push(S(k.cylinder(0, 0, 6, LID[0], LID[1] - LID[0], P, 40, 0.3), { tone: "mid" }));
   out.push(S(k.cylinder(0, 0, 4.6, GLAND[0], GLAND[1] - GLAND[0], P, 36, 0.3), { tone: "mid", inner: Ln(k.sideArc(0, 0, 4.6, GLAND[0] + 2.2, P, 24), { tone: "faint" }) }));
   out.push(S(k.cylinder(0, 0, 3.2, GLAND[1], GLAND[2] - GLAND[1], P, 32, 0.3), { tone: "hi" }));
   out.push(S(k.cylinder(0, 0, 1, HUB_Z + 3, LID[0] - HUB_Z - 3, P, 16), { tone: "hi", crease: "none", inner: Ln(k.sideArc(0, 0, 1, LEVEL, P, 10), { tone: "faint" }) }));
   out.push(S(k.cylinder(0, 0, 2.4, HUB_Z - 3, 6, P, 24, 0.3), { tone: "mid" }));
-  out.push(`<g data-part="impeller"></g>`);
+  out.push(`<g data-part="impeller"></g>`, "</g>");
   return out.join("");
 }
 
@@ -395,7 +400,7 @@ effluent();
 gasLine();
 A.settle(R, P);
 R.items.sort((a, b) => a.key - b.key);
-const body = R.items.map((item) => item.svg);
+const body = wrapItems("lab", R.items);
 
 export const svg = k.figureSvg({ width: WIDTH, height: HEIGHT, label: [
   "A 5 litre bench-top CSTR, cut open: a jacketed glass vessel on a support ring, stirred by an overhead motor on a lab stand. Warm water from a heating circulator runs through the jacket. A peristaltic pump feeds it from a bottle; an overflow side arm sends effluent to a bottle; the gas runs through a drum gas meter into a sampling bag.",
@@ -439,7 +444,7 @@ function labLive(C, root, clock) {
   const area = (r) => Math.PI * (r * 3) ** 2 / 1000;     // mL per mm of height, r in units of 3 mm
   // State: the jacket, the mixer, the gas counted (mL), the bag (mL), the two bottles (mL).
   const sim = { temp: DESIGN.temperature, heater: false, mixing: false, feeding: false, strat: 0.4, prop: 0, rotor: 0, gas: 0, bag: 2600, feed: 330, eff: 60, extra: 0, note: 0 };
-  let plant = { ...DESIGN }, steadyNow = steady(plant, LAB_VOLUME), gasRate = steadyNow.biogas * 1e6 / 24;   // mL / h
+  let plant = { ...DESIGN }, steadyNow = steady(plant, LAB_VOLUME), warmNow = steadyNow, gasRate = steadyNow.biogas * 1e6 / 24;   // mL / h
   const bubbles = Array.from({ length: 50 }, (_, i) => ({ face: i % 2, r: 2 + Math.random() * (C.RI - 4), z: C.ZF + Math.random() * (C.LEVEL - C.ZF), s: 0.5 + Math.random() * 0.7, live: Math.random() < 0.5 }));
   const polar3 = (r, t, z) => [r * Math.cos(t), r * Math.sin(t), z];
   const inWedge = (t) => { const a = ((t - C.CUT[0]) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI); return a > 0.08 && a < C.CUT[1] - C.CUT[0] - 0.08; };
@@ -504,7 +509,9 @@ function labLive(C, root, clock) {
   }
   const hhmm = (h) => String(Math.floor(h)).padStart(2, "0") + ":" + String(Math.floor((h * 60) % 60)).padStart(2, "0");
   function tick(dt, dtH, wall, calm, visible) {
-    gasRate += (steadyNow.biogas * 1e6 / 24 - gasRate) * (1 - Math.exp(-dtH / 6));
+    // The same kinetics as the farm, read at the liquid's own temperature.
+    warmNow = steady({ ...plant, temperature: sim.temp }, LAB_VOLUME);
+    gasRate += (warmNow.biogas * 1e6 / 24 - gasRate) * (1 - Math.exp(-dtH / 6));
     // Feeding: the timer runs the pump four times a day; the side arm lets the same volume out.
     const per = 24 / LAB.pulses, pulse = (steadyNow.q * 1e6) / LAB.pulses / LAB.pumpMlMin / 60;   // h
     sim.feeding = clock.hour % per < pulse || sim.extra > 0;
@@ -521,7 +528,7 @@ function labLive(C, root, clock) {
     // 5 L warms and cools in an hour or two, where the farm tank takes days: the circulator cycles often.
     const set = plant.temperature;
     if (sim.temp < set - 0.1) sim.heater = true;
-    if (sim.temp > set + 0.1) sim.heater = false;
+    if (sim.temp > set + 0.1 || clock.heaterFail) sim.heater = false;
     sim.temp += dtH * ((sim.heater ? 3.2 + 0.1 * Math.max(0, set - 22) : 0) - (sim.temp - 22) / (LAB.tempTau * 4));
     // Gas: through the meter into the bag; a full bag is taken away for analysis.
     const dGas = gasRate * dtH;
@@ -555,8 +562,28 @@ function labLive(C, root, clock) {
     const text = clockText(clock.hour) + " · " + sim.temp.toFixed(1) + " °C · " + (sim.note > 0 ? C.text.emptied : C.text.bag + Math.round((sim.bag / (LAB.bagL * 1000)) * 100) + " %") + " · " + (sim.gas / 1000).toFixed(2).replace(".", LANG === "pt" ? "," : ".") + " L";
     if (readout.textContent !== text) readout.textContent = text;
   }
+  const F = U.facts, n1 = (v) => fmt(v, 1), n0 = (v) => fmt(v, 0);
+  const onOff = (on) => (on ? F.on : F.off);
+  function facts(topic) {
+    const per = 24 / LAB.pulses;
+    switch (topic) {
+      case "vessel": return [[F.volume, n1(LAB_VOLUME * 1000) + " L"], [F.hrt, n0(plant.hrt) + " d"], [F.temp, n1(sim.temp) + " °C"], [F.surface, fmt(surfacePerVolume(LAB.radius, LAB.level), 1) + " m²/m³"]];
+      case "slurry": return [[F.temp, n1(sim.temp) + " °C"], [F.olr, fmt(steadyNow.olr, 2) + " kg VS/m³·d"], [F.share, n0(warmNow.share * 100) + " %"], [F.layers, n0(sim.strat * 100) + " %"]];
+      case "jacket": return [[F.state, clock.heaterFail ? F.failed : sim.heater ? F.heating : F.off], [F.temp, n1(sim.temp) + " °C"], [F.set, n0(plant.temperature) + " °C"]];
+      case "circ": return [[F.state, clock.heaterFail ? F.failed : onOff(sim.heater)], [F.temp, n1(sim.temp) + " °C"], [F.set, n0(plant.temperature) + " °C"]];
+      case "stirrer": return [[F.state, onOff(sim.mixing)], [F.mode, U[clock.mixerMode]], [F.layers, n0(sim.strat * 100) + " %"]];
+      case "lid": return [[F.temp, n1(sim.temp) + " °C"], [F.biogasIn, n1(gasRate) + " mL/h"]];
+      case "feed": return [[F.state, sim.feeding ? F.pumping : F.waiting], [F.perDay, n0(steadyNow.q * 1e6) + " mL/d"], [F.pulse, n0((steadyNow.q * 1e6) / LAB.pulses / LAB.pumpMlMin) + " min · " + LAB.pulses + "×/d"], [F.bottle, n0(sim.feed) + " mL"]];
+      case "effluent": return [[F.state, sim.feeding ? F.flowing : F.waiting], [F.perDay, n0(steadyNow.q * 1e6) + " mL/d"], [F.bottle, n0(sim.eff) + " mL"]];
+      case "meter": return [[F.biogasIn, n1(gasRate) + " mL/h"], [F.counted, fmt(sim.gas / 1000, 2) + " L"], [F.turns, n0((gasRate * 24) / LAB.meterMl) + " " + U.turnsUnit]];
+      case "bag": return [[F.stored, n0(sim.bag) + " mL · " + n0((sim.bag / (LAB.bagL * 1000)) * 100) + " %"], [F.capacity, n0(LAB.bagL) + " L"]];
+    }
+    return [];
+  }
   return {
     sim,
+    facts,
+    now() { return { temp: sim.temp, gas: (gasRate * 24) / 1e6 / LAB_VOLUME }; },
     update(next) { plant = next; steadyNow = steady(plant, LAB_VOLUME); },
     feedNow() { sim.extra = (steadyNow.q * 1e6) / LAB.pulses / LAB.pumpMlMin / 60; },
     emptyBag() { sim.bag = 0; sim.note = 3; },

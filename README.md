@@ -44,7 +44,22 @@ O tempo da planta corre cerca de 10 minutos por segundo (dá para mudar no paine
 - a membrana de gás sobe com o gás armazenado; o motor de 50 kW liga com 70 % e para com 30 %;
 - o flare acende quando o gasômetro enche.
 
-O painel muda temperatura, TRH e ST da alimentação e mostra alimentação, vacas equivalentes, carga orgânica, fração do B₀, metano, biogás, potência elétrica e o TRH de lavagem. O gráfico mostra o metano em função do TRH, com as zonas de lavagem e de sobrecarga.
+- a produção de gás segue a temperatura que o líquido realmente tem, não a temperatura ajustada: a cinética é lida, a cada instante, na temperatura atual (aproximação quase estacionária).
+
+O painel muda temperatura, TRH e ST da alimentação e mostra, para as duas escalas, a temperatura e o biogás de agora, alimentação, vacas equivalentes, carga orgânica, fração do B₀, metano, biogás, potência elétrica, área de parede e piso por m³ e o TRH de lavagem.
+
+Dois gráficos:
+
+- **metano por m³ de reator em função do TRH**, com as zonas de lavagem e de sobrecarga. Um eixo só: a cinética não conhece tamanho, então a mesma curva serve às duas escalas; o tooltip converte para Nm³/d na fazenda e NL/d na bancada;
+- **as últimas 48 h de tempo da planta**: biogás por m³ de reator e temperatura, fazenda e bancada nos mesmos eixos.
+
+### Peças
+
+Aponte para qualquer peça de uma figura (ou toque, ou escolha um botão embaixo dela): a peça se destaca, o resto esmaece e um cartão diz o que ela é, o que está fazendo agora (valores ao vivo) e o que muda na outra escala. São dez peças na fazenda (tanque, chorume, agitador, serpentinas, cobertura, alimentação, linha de gás, motor, flare, digestato) e dez na bancada (vidro, líquido, camisa, banho, agitador, tampa, bomba peristáltica, efluente, medidor de gás, bolsa). Os textos ficam em `src/topics.mjs`.
+
+### Cenário: falha no aquecimento
+
+O botão **Falha no aquecimento** (tecla H) desliga o aquecimento nas duas escalas. Os 5 L esfriam em poucas horas; os 520 m³ perdem uns poucos graus no mesmo tempo, porque têm cinquenta vezes menos superfície por volume (0,55 contra 27 m²/m³). Ligue de novo e compare como cada um volta.
 
 **Teste:** ponha o TRH em 6 d. O modelo dá o máximo de metano ali, mas a carga orgânica passa de 4 kg SV/m³·d, o motor não dá conta e o flare acende. Na prática, um digestor acidifica antes disso.
 
@@ -61,7 +76,7 @@ Ele **não** tem:
 
 - acidificação nem inibição por amônia, por isso o aviso acima de 4 kg SV/m³·d;
 - a transição mesofílico/termofílico (μm é linear na temperatura);
-- dinâmica real: a planta responde em horas, um digestor real leva semanas;
+- dinâmica real: a planta responde em horas, um digestor real leva semanas; e uma queda de temperatura só reduz o gás pela cinética de Chen e Hashimoto, que em TRH longo é pouco sensível: o choque que um digestor real sofre com uma queda brusca não está aqui;
 - balanço térmico real: o aquecimento e o gasômetro são controles liga/desliga simples.
 
 ## Rodar localmente
@@ -84,6 +99,7 @@ src/kit.mjs        carrega o kit Anatomy, o idioma e o tema
 src/parts.mjs      as peças comuns (caixas, cilindros, peças torneadas, flanges, tubos) que registram a forma real para a auditoria
 src/farm.mjs       Fig 1: a geometria e a animação do tanque da fazenda
 src/lab.mjs        Fig 2: a geometria e a animação do reator de bancada
+src/topics.mjs     as peças que se pode apontar em cada figura, e o que cada uma faz (EN e PT)
 src/build.mjs      a página larga, o painel, o gráfico e o relógio comum; confere o modelo e gera site/
 vendor/anatomy/    o kit de desenho isométrico Anatomy (MIT), copiado da versão em VERSION
 .github/workflows/ o deploy no GitHub Pages: gera, audita e publica a cada push na main

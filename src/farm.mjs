@@ -2,6 +2,7 @@
 // Its geometry is recorded for the audit (farm.R); farm.live is the page code that moves it.
 import { k, G, A, TB, SH, L, DEG } from "./kit.mjs";
 import { partsFor } from "./parts.mjs";
+import { wrapItems } from "./topics.mjs";
 import * as M from "./model.mjs";
 
 // ── World: 1 unit = 10 cm ───────────────────────────────────────────────────
@@ -117,12 +118,14 @@ function slurry() {
     out.push(`<path data-part="sediment" class="cstr-sediment" d="${onCut(t, [[0.3, Z0], [RI - 0.1, Z0], [RI - 0.1, Z0 + 6], [0.3, Z0 + 6]])}"/>`);
     out.push(`<path data-part="scum" class="cstr-scum" d="${onCut(t, [[0.3, LEVEL - 4], [RI - 0.1, LEVEL - 4], [RI - 0.1, LEVEL], [0.3, LEVEL]])}"/>`);
     // Heating loops on the inside of the wall, cut: a stainless pipe on a bracket.
+    out.push('<g data-topic="heat">');
     for (const z of HEAT_Z) {
       const circle = Array.from({ length: 16 }, (_, i) => [HEAT_R + 1.3 * Math.cos((i / 16) * 2 * Math.PI), z + 1.3 * Math.sin((i / 16) * 2 * Math.PI)]);
       out.push(`<path data-part="heat" class="cstr-heat" d="${onCut(t, circle)}"/>`);
       out.push(Ln(onCut(t, circle), { tone: "mid" }));
       out.push(Ln(k.segment(polar(HEAT_R + 1.3, t, z), polar(RI, t, z), P), { tone: "lo" }));
     }
+    out.push("</g>");
   }
   // The circulation the mixer drives, on the surface: arcs that run toward lower angles while it turns.
   const swirl = [18, 33, 48].map((r) => k.onTop(arc(r, KEPT[1] - 0.06, KEPT[0] + 0.06, 72), LEVEL + 0.05, P)).join("");
@@ -341,12 +344,12 @@ put("stand.plate", [0, 0, -PLATE_H / 2], bench(), [A.slab(PLATE, -PLATE_H, PLATE
 const tankSvg = [
   slab(),
   wall(FAR), rail(FAR),
-  slurry(),
-  mast(),
-  mixer(),
-  `<g class="cstr-outer">${outerShell.far}${Ln(outerShell.edges, { tone: "mid" })}</g>`,
+  `<g data-topic="slurry">${slurry()}</g>`,
+  `<g data-topic="roof">${mast()}</g>`,
+  `<g data-topic="mixer">${mixer()}</g>`,
+  `<g data-topic="roof"><g class="cstr-outer">${outerShell.far}${Ln(outerShell.edges, { tone: "mid" })}</g>`,
   `<g data-part="inner" class="cstr-inner"></g>`,
-  `<g class="cstr-outer-cut">${Ln(outerShell.cuts, { tone: "hi" })}</g>`,
+  `<g class="cstr-outer-cut">${Ln(outerShell.cuts, { tone: "hi" })}</g></g>`,
   wall(NEAR_L, { outer: true, ends: [CUT[1]] }), rail(NEAR_L),
   wall(NEAR_R, { outer: true, ends: [CUT[0] + 2 * Math.PI] }), rail(NEAR_R),
 ].join("");
@@ -363,7 +366,7 @@ flare();
 A.settle(R, P);
 R.items.sort((a, b) => a.key - b.key);
 // Exhaust and flame float above everything they rise from.
-const body = [...R.items.map((item) => item.svg), `<g data-part="exhaust"></g>`, `<g data-part="flame"></g>`];
+const body = [...wrapItems("farm", R.items), `<g data-topic="chp"><g data-part="exhaust"></g></g>`, `<g data-topic="flare"><g data-part="flame"></g></g>`];
 export const svg = k.figureSvg({ width: WIDTH, height: HEIGHT, label: [
   "A farm biogas digester of the continuously stirred tank type, cut open. A round concrete tank, insulated and clad, holds 520 cubic metres of dairy-manure slurry under a double-membrane gas roof whose inner membrane rises and falls with the stored gas. A propeller mixer on a guide mast stirs the slurry; heating loops on the inside of the wall keep it warm; bubbles rise through the cut faces. A screw pump feeds it from a pit; an overflow sends digestate to a pit; the gas goes through a condensate trap to an engine container, with a flare for surplus gas.",
   "Um biodigestor de mistura completa (CSTR) cortado ao meio. Um tanque redondo de concreto, isolado e revestido, guarda 520 metros cúbicos de chorume de gado leiteiro sob uma cobertura de dupla membrana, cuja membrana interna sobe e desce com o gás armazenado. Um agitador de hélice numa haste-guia mistura o chorume; serpentinas de aquecimento na face interna da parede mantêm a temperatura; bolhas sobem pelas faces do corte. Uma bomba helicoidal o alimenta a partir de um poço; um extravasor leva o digestato a uma caixa; o gás passa por um purgador de condensado até o contêiner do motor, com um flare para o excedente.",
@@ -410,7 +413,7 @@ function farmLive(C, root, clock) {
   const PUMP_M3H = 10;   // feed pump rate
   const PULSES = 8;      // feeds a day
   const sim = { fill: 0.45, chp: false, flaring: 0, temp: DESIGN.temperature, heater: false, mixing: false, feeding: false, strat: 0.4, prop: 0, fan: 0, extra: 0 };
-  let plant = { ...DESIGN }, steadyNow = steady(plant), gasRate = steadyNow.biogas / 24;
+  let plant = { ...DESIGN }, steadyNow = steady(plant), warmNow = steadyNow, gasRate = steadyNow.biogas / 24;
   const CHP_BIOGAS = 50 / (ENERGY.kwhPerM3 * ENERGY.electrical) / FEED.ch4InBiogas; // m3 biogas / h at 50 kWe
   const bubbles = Array.from({ length: 70 }, (_, i) => ({ face: i % 2, r: 3 + Math.random() * (C.RI - 6), z: C.Z0 + Math.random() * (C.LEVEL - C.Z0), s: 0.5 + Math.random() * 0.7, live: Math.random() < 0.5 }));
   const puffs = Array.from({ length: 10 }, (_, i) => ({ z: (i / 10) * 18, x: 0 }));
@@ -475,8 +478,10 @@ function farmLive(C, root, clock) {
     parts.flame.innerHTML = '<path class="cstr-flame" d="' + pathOf(pts, true) + '" fill-opacity="' + (0.35 + 0.6 * f).toFixed(2) + '"/>';
   }
   function tick(dt, dtH, wall, calm) {
-    // The process answers a change over hours, not at once (a real one takes weeks).
-    gasRate += (steadyNow.biogas / 24 - gasRate) * (1 - Math.exp(-dtH / 6));
+    // The process answers a change over hours, not at once (a real one takes weeks). It follows the slurry's own
+    // temperature, not the set point: the kinetics are read at the temperature the tank has reached.
+    warmNow = steady({ ...plant, temperature: sim.temp }, VOLUME);
+    gasRate += (warmNow.biogas / 24 - gasRate) * (1 - Math.exp(-dtH / 6));
     // Feeding: eight pulses a day at the pump rate; the overflow lets the same volume out. "Feed now" adds one pulse.
     const pulse = steadyNow.q / PULSES / PUMP_M3H;
     sim.feeding = clock.hour % (24 / PULSES) < pulse || sim.extra > 0;
@@ -494,7 +499,7 @@ function farmLive(C, root, clock) {
     // Heating: loops on below the set point, off above it; 520 m3 of slurry loses heat slowly to a 22 C day.
     const set = plant.temperature;
     if (sim.temp < set - 0.3) sim.heater = true;
-    if (sim.temp > set + 0.3) sim.heater = false;
+    if (sim.temp > set + 0.3 || clock.heaterFail) sim.heater = false;
     sim.temp += dtH * ((sim.heater ? 0.9 + 0.03 * Math.max(0, set - 37) : 0) - 0.03 * (sim.temp - 22));
     if (!calm) { sim.prop += sim.mixing ? dt * 2 * Math.PI * 2.2 : 0; sim.fan += sim.chp ? dt * 2 * Math.PI * 1.4 : 0; }
     drawMembrane(sim.fill);
@@ -518,8 +523,30 @@ function farmLive(C, root, clock) {
   drawMembrane(sim.fill);
   drawProp(0);
   drawFans();
+  // What each part is doing now, for its card: [label, value] rows.
+  const F = U.facts, n1 = (v) => fmt(v, 1), n0 = (v) => fmt(v, 0);
+  const onOff = (on) => (on ? F.on : F.off);
+  function facts(topic) {
+    const gasH = gasRate, store = sim.fill * STORE_M3;
+    switch (topic) {
+      case "tank": return [[F.volume, n0(VOLUME) + " m³"], [F.hrt, n0(plant.hrt) + " d"], [F.temp, n1(sim.temp) + " °C"], [F.surface, fmt(surfacePerVolume(PLANT.radius, PLANT.level), 2) + " m²/m³"]];
+      case "slurry": return [[F.temp, n1(sim.temp) + " °C"], [F.olr, fmt(steadyNow.olr, 2) + " kg VS/m³·d"], [F.share, n0(warmNow.share * 100) + " %"], [F.layers, n0(sim.strat * 100) + " %"]];
+      case "mixer": return [[F.state, onOff(sim.mixing)], [F.mode, U[clock.mixerMode]], [F.layers, n0(sim.strat * 100) + " %"]];
+      case "heat": return [[F.state, clock.heaterFail ? F.failed : onOff(sim.heater)], [F.temp, n1(sim.temp) + " °C"], [F.set, n0(plant.temperature) + " °C"]];
+      case "roof": return [[F.stored, n0(store) + " m³ · " + n0(sim.fill * 100) + " %"], [F.biogasIn, n1(gasH) + " m³/h"], [F.biogasOut, n1(sim.chp ? CHP_BIOGAS : 0) + " m³/h"]];
+      case "feed": return [[F.state, sim.feeding ? F.pumping : F.waiting], [F.perDay, n1(steadyNow.q) + " m³/d"], [F.pulse, n0((steadyNow.q / PULSES / PUMP_M3H) * 60) + " min · " + PULSES + "×/d"]];
+      case "gas": return [[F.biogasIn, n1(gasH) + " m³/h"], [F.methane, n0(FEED.ch4InBiogas * 100) + " %"], [F.toEngine, n1(sim.chp ? CHP_BIOGAS : 0) + " m³/h"]];
+      case "chp": return [[F.state, onOff(sim.chp)], [F.power, sim.chp ? "50 kW" : "0 kW"], [F.uses, n1(CHP_BIOGAS) + " m³/h"], [F.stored, n0(sim.fill * 100) + " %"]];
+      case "flare": return [[F.state, sim.flaring > 0.5 ? F.burning : F.off], [F.stored, n0(sim.fill * 100) + " %"]];
+      case "digestate": return [[F.state, sim.feeding ? F.flowing : F.waiting], [F.perDay, n1(steadyNow.q) + " m³/d"]];
+    }
+    return [];
+  }
   return {
     sim,
+    facts,
+    // Biogas per m3 of reactor per day and temperature: the two numbers both scales share.
+    now() { return { temp: sim.temp, gas: (gasRate * 24) / VOLUME }; },
     update(next) { plant = next; steadyNow = steady(plant, VOLUME); },
     feedNow() { sim.extra = steadyNow.q / PULSES / PUMP_M3H; },
     tick,
