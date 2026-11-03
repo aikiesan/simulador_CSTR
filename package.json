@@ -4,8 +4,8 @@
   "type": "module",
   "description": "Biodigestor CSTR animado e interativo, com um modelo didático de Chen-Hashimoto",
   "scripts": {
-    "build": "node src/build.mjs --audit && node src/build.mjs --light --audit && node src/build.mjs --pt --audit && node src/build.mjs --pt --light --audit",
-    "audit": "node src/build.mjs --light --audit"
+    "build": "node src/build.mjs --pt --light --audit",
+    "audit": "node src/build.mjs --pt --light --audit"
   },
   "engines": { "node": ">=20.10" }
 }
