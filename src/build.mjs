@@ -54,7 +54,17 @@ const U = [
     warnWash: "HRT at or below washout: the methanogens leave faster than they grow, and gas stops.",
     chart: "Methane per m³ of reactor against retention time, at this temperature and feed: one curve serves both scales", xAxis: "HRT (d)", yFarm: "farm, Nm³ CH₄/d", yLab: "bench, NL CH₄/d", zoneWash: "washout", zoneOlr: "OLR > 4", now: "now",
     table: "Show as a table", turnsUnit: "turns/d", bagFull: "bag emptied for analysis",
-    heatFail: "Heating fails", scenarios: "Try", parts: "Parts", other: "At the other scale",
+    heatFail: "Heating fails", scenarios: "Try a scenario", parts: "Parts", other: "At the other scale", pause: "Pause", resume: "Resume",
+    diameter: "Inside diameter", depth: "Liquid depth",
+    ratios: "From bench to farm: size ×{lin} · wetted surface ×{area} · volume ×{vol}. At the same HRT every flow scales with the volume; heat loss scales only with the surface.",
+    presets: {
+      design: ["Design point", "37 °C, 25 d, 8 % TS: about 90 % of B₀ at 2.5 kg VS/m³·d. The gas store fills and the engine runs in blocks."],
+      cold: ["Cold digester", "25 °C, as an unheated tank in a mild climate. At 25 d the share of B₀ falls only from 90 to 82 %, but washout moves from 2.8 to 5.1 d. Watch the bench cool in hours and the farm tank take days."],
+      thermo: ["Thermophilic", "52 °C. In this model growth rises in a straight line with temperature, so at 25 d there is little left to gain (94 %); a hotter reactor earns its keep at short HRTs."],
+      short: ["Short HRT", "8 d: more than twice the gas on paper, but at 7.8 kg VS/m³·d real digesters acidify, which this model cannot show. The engine cannot keep up and the flare burns the surplus."],
+      dilute: ["Dilute feed", "4 % TS: too much wash water. The same share of B₀, half the methane: the same tank now holds half the manure."],
+      still: ["Mixers off", "Scum floats up and grit settles on the cut faces. The kinetics still assume a completely mixed tank, so the gas does not change here; in a real tank, dead zones shrink the working volume."],
+    },
     pick: "Point at or tap any part of the drawing, or pick one above, to see what it does and what it is doing now.",
     tempNow: "Temperature now", gasNow: "Biogas now", surface: "Wall and floor per m³",
     yAxis: "Nm³ CH₄ per m³ of reactor per day",
@@ -80,7 +90,17 @@ const U = [
     warnWash: "TRH no limite de lavagem ou abaixo: as metanogênicas saem mais rápido do que crescem, e o gás para.",
     chart: "Metano por m³ de reator em função do tempo de retenção, nesta temperatura e alimentação: uma curva serve às duas escalas", xAxis: "TRH (d)", yFarm: "fazenda, Nm³ CH₄/d", yLab: "bancada, NL CH₄/d", zoneWash: "lavagem", zoneOlr: "COV > 4", now: "agora",
     table: "Ver como tabela", turnsUnit: "voltas/d", bagFull: "bolsa esvaziada para análise",
-    heatFail: "Falha no aquecimento", scenarios: "Teste", parts: "Peças", other: "Na outra escala",
+    heatFail: "Falha no aquecimento", scenarios: "Teste um cenário", parts: "Peças", other: "Na outra escala", pause: "Pausar", resume: "Continuar",
+    diameter: "Diâmetro interno", depth: "Profundidade do líquido",
+    ratios: "Da bancada à fazenda: tamanho ×{lin} · superfície molhada ×{area} · volume ×{vol}. No mesmo TRH, toda vazão cresce com o volume; a perda de calor cresce só com a superfície.",
+    presets: {
+      design: ["Ponto de projeto", "37 °C, 25 d, 8 % de ST: cerca de 90 % do B₀ com 2,5 kg SV/m³·d. O gasômetro enche e o motor funciona em blocos."],
+      cold: ["Digestor frio", "25 °C, como um tanque sem aquecimento num clima ameno. Em 25 d a fração do B₀ cai só de 90 para 82 %, mas a lavagem passa de 2,8 para 5,1 d. Veja a bancada esfriar em horas e o tanque da fazenda levar dias."],
+      thermo: ["Termofílico", "52 °C. Neste modelo o crescimento sobe em linha reta com a temperatura, então em 25 d há pouco a ganhar (94 %); um reator mais quente compensa em TRH curto."],
+      short: ["TRH curto", "8 d: mais que o dobro do gás no papel, mas com 7,8 kg SV/m³·d digestores reais acidificam, e este modelo não mostra isso. O motor não dá conta e o flare queima o excedente."],
+      dilute: ["Alimentação diluída", "4 % de ST: água de lavagem demais. A mesma fração do B₀, metade do metano: o mesmo tanque agora guarda metade do esterco."],
+      still: ["Agitadores desligados", "A crosta sobe e a areia assenta nas faces do corte. A cinética continua supondo mistura completa, então o gás não muda aqui; num tanque real, zonas mortas reduzem o volume útil."],
+    },
     pick: "Aponte ou toque qualquer peça do desenho, ou escolha uma acima, para ver para que serve e o que está fazendo agora.",
     tempNow: "Temperatura agora", gasNow: "Biogás agora", surface: "Parede e piso por m³",
     yAxis: "Nm³ CH₄ por m³ de reator por dia",
@@ -99,7 +119,7 @@ const U = [
 const slider = (key, min, max, step, value) => `<label class="cstr-ctl"><span>${esc(U[key])} <output data-out="${key}"></output></span><input type="range" data-in="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`;
 const ROWS = [
   ["tempNow", "pair"], ["gasNow", "pair"],
-  ["volume", "both3"], ["surface", "pair"], ["feed", "pair"], ["olr", "same"], ["share", "same"], ["ch4", "pair"], ["biogas", "pair"], ["perM3", "same"], ["power", "pair"], ["cows", "farm"], ["turns", "lab"], ["washout", "same"],
+  ["diameter", "pair"], ["depth", "pair"], ["volume", "both3"], ["surface", "pair"], ["feed", "pair"], ["olr", "same"], ["share", "same"], ["ch4", "pair"], ["biogas", "pair"], ["perM3", "same"], ["power", "pair"], ["cows", "farm"], ["turns", "lab"], ["washout", "same"],
 ];
 const row = ([key, kind]) => `<tr data-row="${key}"><th scope="row">${esc(U[key])}</th>${kind === "same" ? `<td colspan="2" class="cstr-same"><output data-cell="${key}"></output></td>` : `<td><output data-cell="${key}.farm"></output></td><td><output data-cell="${key}.lab"></output></td>`}</tr>`;
 const panel = `
@@ -111,15 +131,19 @@ const panel = `
     ${slider("ts", 4, 12, 0.5, M.DESIGN.ts * 100)}
     <label class="cstr-ctl"><span>${esc(U.mixer)}</span><select data-in="mixer"><option value="auto">${esc(U.auto)}</option><option value="on">${esc(U.on)}</option><option value="off">${esc(U.off)}</option></select></label>
     <label class="cstr-ctl"><span>${esc(U.speed)}</span><select data-in="speed">${[2.5, 5, 10, 30, 60].map((v) => `<option value="${v}"${v === 10 ? " selected" : ""}>${String(v).replace(".", L ? "," : ".")} ${esc(U.perSec)}</option>`).join("")}</select></label>
-    <div class="cstr-btns"><button type="button" data-act="feed">${esc(U.feedNow)}</button><button type="button" data-act="bag">${esc(U.emptyBag)}</button><button type="button" data-act="heat" aria-pressed="false" aria-keyshortcuts="H" title="H">${esc(U.heatFail)} <kbd>H</kbd></button></div>
+    <div class="cstr-btns"><button type="button" data-act="feed">${esc(U.feedNow)}</button><button type="button" data-act="bag">${esc(U.emptyBag)}</button><button type="button" data-act="heat" aria-pressed="false" aria-keyshortcuts="H" title="H">${esc(U.heatFail)} <kbd>H</kbd></button><button type="button" data-act="pause" aria-pressed="false" aria-keyshortcuts="Space">${esc(U.pause)}</button></div>
+    <h2 class="cstr-sub">${esc(U.scenarios)}</h2>
+    <div class="cstr-presets" role="group" aria-label="${esc(U.scenarios)}">${Object.entries(U.presets).map(([key, [label]]) => `<button type="button" data-preset="${key}" aria-pressed="false">${esc(label)}</button>`).join("")}</div>
+    <p class="cstr-preset-note" data-preset-note aria-live="polite"></p>
   </div>
   <div class="cstr-nums">
     <table class="cstr-cmp"><thead><tr><th></th><th scope="col">${esc(U.farm)}</th><th scope="col">${esc(U.lab)}</th></tr></thead><tbody>${ROWS.map(row).join("")}</tbody></table>
+    <p class="cstr-ratios" data-ratios></p>
     <p class="cstr-warn" role="status" aria-live="polite" data-warn></p>
   </div>
   <figure class="cstr-chart">
     <figcaption>${esc(U.chart)}</figcaption>
-    <div class="cstr-plot" data-plot><svg viewBox="0 0 640 260" role="img" aria-label="${esc(U.chart)}"></svg><div class="cstr-tip" data-tip hidden></div></div>
+    <div class="cstr-plot cstr-plot-px" data-plot><svg viewBox="0 0 640 260" role="img" aria-label="${esc(U.chart)}"></svg><div class="cstr-tip" data-tip hidden></div></div>
     <details><summary>${esc(U.table)}</summary><table data-table><thead><tr><th>${esc(U.xAxis)}</th><th>${esc(U.olr)}</th><th>${esc(U.share)}</th><th>Nm³/m³·d</th><th>${esc(U.yFarm)}</th><th>${esc(U.yLab)}</th></tr></thead><tbody></tbody></table></details>
   </figure>
   <figure class="cstr-chart cstr-hist">
@@ -145,7 +169,7 @@ const TOPICS = ${JSON.stringify({ farm: topics("farm"), lab: topics("lab") })};
 const clockText = (h) => { const day = Math.floor(h / 24) + 1, hh = Math.floor(h % 24), mm = Math.floor((h * 60) % 60); return ${JSON.stringify(L ? "Dia " : "Day ")} + day + " · " + String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
 ${farm.live}
 ${lab.live}
-const clock = { hour: 6, minutesPerSecond: 10, mixerMode: "auto", heaterFail: false };
+const clock = { hour: 6, minutesPerSecond: 10, mixerMode: "auto", heaterFail: false, paused: false };
 const roots = { farm: document.querySelector('[data-fig="farm"]'), lab: document.querySelector('[data-fig="lab"]') };
 const figs = { farm: farmLive(${JSON.stringify(farm.data)}, roots.farm, clock), lab: labLive(${JSON.stringify(lab.data)}, roots.lab, clock) };
 const still = matchMedia("(prefers-reduced-motion: reduce)");
@@ -155,7 +179,7 @@ function tick(now) {
   const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
   last = now;
   wall += dt;
-  const calm = still.matches;
+  const calm = still.matches || clock.paused;
   const dtH = calm ? 0 : (dt * clock.minutesPerSecond) / 60;
   clock.hour += dtH;
   // Both plants run on the clock; only the ones on screen are drawn.
@@ -175,6 +199,7 @@ const ins = Object.fromEntries([...document.querySelectorAll("[data-in]")].map((
 const outs = Object.fromEntries([...document.querySelectorAll("[data-out]")].map((el) => [el.dataset.out, el]));
 const cells = Object.fromEntries([...document.querySelectorAll("[data-cell]")].map((el) => [el.dataset.cell, el]));
 const warn = document.querySelector("[data-warn]");
+const ratiosEl = document.querySelector("[data-ratios]");
 const plant = { ...DESIGN };
 let farmNow = steady(plant), labNow = steady(plant, LAB_VOLUME);
 function readPanel() {
@@ -204,6 +229,12 @@ function readPanel() {
   cells.perM3.textContent = f2.format(a.ch4PerM3) + " Nm³/m³·d";
   cells["power.farm"].textContent = f1.format(a.kwe) + " kW";
   cells["power.lab"].textContent = sig(b.kwe * 1000) + " W";
+  cells["diameter.farm"].textContent = f0.format(PLANT.radius * 2) + " m";
+  cells["diameter.lab"].textContent = f0.format(LAB.radius * 2000) + " mm";
+  cells["depth.farm"].textContent = f1.format(PLANT.level) + " m";
+  cells["depth.lab"].textContent = f1.format(LAB.level * 1000) + " mm";
+  const wetted = (r, h) => 2 * Math.PI * r * h + Math.PI * r * r;
+  ratiosEl.textContent = U.ratios.replace("{lin}", f0.format(PLANT.radius / LAB.radius)).replace("{area}", f0.format(Math.round(wetted(PLANT.radius, PLANT.level) / wetted(LAB.radius, LAB.level) / 100) * 100)).replace("{vol}", f0.format(Math.round(VOLUME / LAB_VOLUME / 1000) * 1000));
   cells["surface.farm"].textContent = f2.format(surfacePerVolume(PLANT.radius, PLANT.level)) + " m²/m³";
   cells["surface.lab"].textContent = f1.format(surfacePerVolume(LAB.radius, LAB.level)) + " m²/m³";
   cells["cows.farm"].textContent = "≈ " + f0.format(Math.round(a.cows / 5) * 5);
@@ -240,13 +271,16 @@ document.querySelectorAll(".iso-stage").forEach((stage) => stage.addEventListene
 const plot = document.querySelector("[data-plot]");
 const chartSvg = plot.querySelector("svg");
 const tip = plot.querySelector("[data-tip]");
-const W = 640, H = 260, Mg = { l: 48, r: 24, t: 24, b: 34 };
+let W = 640;
+const H = 260, Mg = { l: 48, r: 24, t: 24, b: 34 };
 const X0 = 2, X1 = 60;
 const RATIO = (LAB_VOLUME * 1000) / VOLUME;   // NL at the bench per Nm3 at the farm
 const sx = (h) => Mg.l + ((h - X0) / (X1 - X0)) * (W - Mg.l - Mg.r);
 const hx = (px) => X0 + ((px - Mg.l) / (W - Mg.l - Mg.r)) * (X1 - X0);
 let sy = () => 0;
 function drawChart() {
+  W = Math.max(300, Math.round(plot.clientWidth || 640));
+  chartSvg.setAttribute("viewBox", "0 0 " + W + " " + H);
   const curve = Array.from({ length: 233 }, (_, i) => { const h = X0 + (i / 232) * (X1 - X0); return { h, s: steady({ ...plant, hrt: h }) }; });
   const yMax = Math.max(0.1, ...curve.map((p) => p.s.ch4PerM3)) * 1.12;
   const step = [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2].find((v) => yMax / v <= 5) || 5;
@@ -343,6 +377,30 @@ const toggleHeat = () => { clock.heaterFail = !clock.heaterFail; heatBtn.setAttr
 heatBtn.addEventListener("click", toggleHeat);
 document.querySelectorAll(".iso-stage").forEach((stage) => stage.addEventListener("keydown", (e) => { if (e.key === "h" || e.key === "H") { toggleHeat(); e.preventDefault(); } }));
 
+// ── Pause, and the scenario presets: each sets the panel and says what to watch ──
+const pauseBtn = document.querySelector('[data-act="pause"]');
+const togglePause = () => { clock.paused = !clock.paused; pauseBtn.setAttribute("aria-pressed", String(clock.paused)); pauseBtn.textContent = clock.paused ? U.resume : U.pause; };
+pauseBtn.addEventListener("click", togglePause);
+document.querySelectorAll(".iso-stage").forEach((stage) => stage.addEventListener("keydown", (e) => { if (e.key === " ") { togglePause(); e.preventDefault(); } }));
+const PRESETS = {
+  design: { temperature: 37, hrt: 25, ts: 8, mixer: "auto" },
+  cold: { temperature: 25, hrt: 25, ts: 8, mixer: "auto" },
+  thermo: { temperature: 52, hrt: 25, ts: 8, mixer: "auto" },
+  short: { temperature: 37, hrt: 8, ts: 8, mixer: "auto" },
+  dilute: { temperature: 37, hrt: 25, ts: 4, mixer: "auto" },
+  still: { temperature: 37, hrt: 25, ts: 8, mixer: "off" },
+};
+const presetBtns = [...document.querySelectorAll("[data-preset]")], presetNote = document.querySelector("[data-preset-note]");
+let presetOn = null;
+const markPreset = (key) => { presetOn = key; presetBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.preset === key))); presetNote.textContent = key ? U.presets[key][1] : ""; };
+presetBtns.forEach((b) => b.addEventListener("click", () => {
+  const p = PRESETS[b.dataset.preset];
+  for (const k of ["temperature", "hrt", "ts", "mixer"]) ins[k].value = p[k];
+  readPanel();
+  markPreset(b.dataset.preset);
+}));
+["temperature", "hrt", "ts", "mixer"].forEach((k) => ins[k].addEventListener("input", () => markPreset(null)));
+
 // ── History: both scales sampled every quarter hour of plant time, 48 h kept ──
 const hist = [];
 let nextSample = clock.hour;
@@ -412,7 +470,7 @@ histBox.addEventListener("pointermove", (event) => {
   histTip.style.left = Math.max(0, Math.min(box.width - 240, left + 12)) + "px";
   histTip.style.top = "8px";
 });
-addEventListener("resize", () => drawHist());
+addEventListener("resize", () => { drawChart(); drawHist(); });
 histBox.addEventListener("pointerleave", () => { histTip.hidden = true; const c = histSvg.querySelector("[data-cross]"); if (c) c.style.display = "none"; });
 
 // Every 0.4 s of wall time: the live rows, the open part cards and the history.
@@ -487,6 +545,14 @@ const CSS = `
 .cstr-ctl input{width:100%;accent-color:var(--cstr-series)}
 .cstr-ctl select,.cstr-btns button{font:inherit;color:var(--anatomy-text);background:var(--anatomy-page);border:1px solid var(--anatomy-mid);border-radius:4px;padding:5px 8px}
 .cstr-btns{display:flex;flex-wrap:wrap;gap:8px}
+.cstr-panel h2.cstr-sub{margin-top:8px}
+.cstr-presets{display:flex;flex-wrap:wrap;gap:6px}
+.cstr-presets button{font:inherit;font-size:13px;line-height:1.3;color:var(--anatomy-text);background:var(--anatomy-page);border:1px solid var(--anatomy-mid);border-radius:999px;padding:4px 10px;cursor:pointer}
+.cstr-presets button:hover{border-color:var(--anatomy-text)}
+.cstr-presets button:focus-visible{outline:2px solid var(--cstr-series);outline-offset:1px}
+.cstr-presets button[aria-pressed="true"]{background:var(--anatomy-strong);color:var(--anatomy-page);border-color:var(--anatomy-strong)}
+.cstr-preset-note{margin:0;min-height:4.8em;color:var(--anatomy-text)}
+.cstr-ratios{margin:10px 0 0;color:var(--anatomy-muted)}
 .cstr-btns button{cursor:pointer}
 .cstr-btns kbd{font:500 13px var(--anatomy-mono,ui-monospace,monospace);opacity:.7;margin-left:4px}
 .cstr-btns button:hover{border-color:var(--anatomy-text)}

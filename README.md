@@ -57,6 +57,10 @@ Dois gráficos:
 
 Aponte para qualquer peça de uma figura (ou toque, ou escolha um botão embaixo dela): a peça se destaca, o resto esmaece e um cartão diz o que ela é, o que está fazendo agora (valores ao vivo) e o que muda na outra escala. São dez peças na fazenda (tanque, chorume, agitador, serpentinas, cobertura, alimentação, linha de gás, motor, flare, digestato) e dez na bancada (vidro, líquido, camisa, banho, agitador, tampa, bomba peristáltica, efluente, medidor de gás, bolsa). Os textos ficam em `src/topics.mjs`.
 
+### Cenários prontos
+
+No painel, **Teste um cenário** ajusta tudo de uma vez e diz o que observar: ponto de projeto, digestor frio (25 °C), termofílico (52 °C), TRH curto (8 d), alimentação diluída (4 % de ST) e agitadores desligados. **Pausar** (ou a barra de espaço numa figura) congela o relógio para ler os cartões com calma. Abaixo do quadro, a linha de razões resume a mudança de escala: tamanho ×67, superfície molhada ×2.100, volume ×104.000.
+
 ### Cenário: falha no aquecimento
 
 O botão **Falha no aquecimento** (tecla H) desliga o aquecimento nas duas escalas. Os 5 L esfriam em poucas horas; os 520 m³ perdem uns poucos graus no mesmo tempo, porque têm cinquenta vezes menos superfície por volume (0,55 contra 27 m²/m³). Ligue de novo e compare como cada um volta.
