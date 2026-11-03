@@ -63,6 +63,10 @@ export const LAB = {
 };
 export const LAB_VOLUME = Math.PI * LAB.radius ** 2 * LAB.level; // m3 of liquid, 5.0 L
 
+// Wall and floor wetted by the liquid, per m3 of liquid (m2/m3): 2/r for the wall, 1/h for the floor. Heat is lost
+// through it, so a vessel with more of it per volume warms and cools faster.
+export const surfacePerVolume = (radius, level) => 2 / radius + 1 / level;
+
 // Gas storage between the slurry and the inner membrane at full stroke: the freeboard cylinder plus the dome cap.
 export const STORE = (() => {
   const a = PLANT.radius, h = PLANT.roofRise;
