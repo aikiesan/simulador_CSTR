@@ -115,6 +115,8 @@ function liquid() {
   const swirl = [10, 18, 25].map((r) => k.onTop(arc(r, KEPT[1] - 0.06, KEPT[0] + 0.06, 72), LEVEL + 0.05, P)).join("");
   out.push(`<g data-part="swirl">${Ln(swirl, { tone: "lo", flow: true, free: true })}</g>`);
   out.push(`<g data-part="bubbles"></g>`);
+  // Foam, drawn live on top of the liquid when the gas comes faster than the design rate.
+  out.push(`<g data-part="foam"></g>`);
   return out.join("");
 }
 
@@ -465,13 +467,16 @@ function labLive(C, root, clock) {
     rotor: q('[data-part="rotor"]'), needle: q('[data-part="meter-needle"]'), count: q('[data-part="meter-count"] text'), bag: q('[data-part="bag"]'),
     circ: q('[data-part="circ-display"] text'), circLamp: q('[data-part="circ-lamp"]'), pump: q('[data-part="pump-display"] text'), pumpLamp: q('[data-part="pump-lamp"]'),
     feedLevel: q('[data-part="feed-level"]'), effLevel: q('[data-part="eff-level"]'),
+    foam: q('[data-part="foam"]'), liquid: q('[data-topic="slurry"]'),
   };
   const flows = {};
   qa("[data-flow-of]").forEach((el) => (flows[el.dataset.flowOf] ??= []).push(el));
   const setFlow = (names, on) => names.forEach((n) => (flows[n] || []).forEach((el) => el.classList.toggle("on", on)));
   const area = (r) => Math.PI * (r * 3) ** 2 / 1000;     // mL per mm of height, r in units of 3 mm
   // State: the jacket, the mixer, the gas counted (mL), the bag (mL), the two bottles (mL).
-  const sim = { temp: DESIGN.temperature, heater: false, mixing: false, feeding: false, strat: 0.4, prop: 0, rotor: 0, gas: 0, bag: 2600, feed: 330, eff: 60, extra: 0, note: 0 };
+  const sim = { temp: DESIGN.temperature, heater: false, mixing: false, feeding: false, strat: 0.4, prop: 0, rotor: 0, gas: 0, bag: 2600, feed: 330, eff: 60, extra: 0, note: 0, foam: 0 };
+  // The design gas rate (mL/h): foam and bubble size are read against it.
+  const designGas = (steady(DESIGN, LAB_VOLUME).biogas * 1e6) / 24;
   let plant = { ...DESIGN }, steadyNow = steady(plant, LAB_VOLUME), gasRate = steadyNow.biogas * 1e6 / 24;
   // The liquid itself: degradable VS left (S) and active biomass (b), kg VS per m3, started as a running reactor.
   const proc = contentsAt(DESIGN);   // mL / h
@@ -492,7 +497,9 @@ function labLive(C, root, clock) {
     parts.impeller.innerHTML = d ? '<path class="iso-fill" d="' + d + '"/><path class="iso-shade" data-shade="2" d="' + d + '"/><path class="iso-line" data-tone="hi" d="' + d + '"/>' : "";
   }
   function drawBubbles(dtH) {
-    const rate = clamp(gasRate / 160, 0, 2.5);
+    const rate = clamp(gasRate / designGas, 0, 2.5);
+    // Faster gas makes bigger bubbles, not only more of them.
+    const size = clamp(0.6 + 0.4 * Math.sqrt(rate), 0.6, 1.4);
     let html = "";
     for (const b of bubbles) {
       if (b.live) {
@@ -501,7 +508,7 @@ function labLive(C, root, clock) {
       } else if (Math.random() < rate * dtH * 2) b.live = true;
       if (!b.live) continue;
       const p = iso(polar3(b.r, C.CUT[b.face], b.z), P);
-      html += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + (0.5 + 0.3 * b.s).toFixed(2) + '"/>';
+      html += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + ((0.5 + 0.3 * b.s) * size).toFixed(2) + '"/>';
     }
     parts.bubbles.innerHTML = html;
   }
@@ -532,6 +539,22 @@ function labLive(C, root, clock) {
     const b = { ...C.BAG }, inset = (1 - Math.sqrt(f)) * 1.2;
     const plan = { x: b.x + inset, y: b.y + inset, w: b.w - 2 * inset, d: b.d - 2 * inset, r: b.r };
     parts.bag.innerHTML = solid(slabOf(plan, 0, h, P, 8, Math.min(h * 0.46, 3.6)), "mid") + '<path class="iso-line" data-tone="faint" d="' + sideSeam(plan, h * 0.5, P, 8) + '"/>';
+  }
+  // Foam: a layer up to 7 units (21 mm) thick on the liquid, its two cut faces dotted with bubbles.
+  const foamDots = Array.from({ length: 40 }, (_, i) => ({ face: i % 2, r: 1 + ((i * 7.31) % 1) * (C.RI - 2), z: ((i * 3.77) % 1), s: 0.35 + ((i * 5.13) % 1) * 0.45 }));
+  let foamDrawn = -1;
+  function drawFoam() {
+    const h = Math.round(sim.foam * 7 * 10) / 10;
+    if (h === foamDrawn) return;
+    foamDrawn = h;
+    if (h < 0.3) { parts.foam.innerHTML = ""; return; }
+    const z0 = C.LEVEL, z1 = C.LEVEL + h;
+    const rim = Array.from({ length: 49 }, (_, i) => { const t = C.KEPT[0] + ((C.KEPT[1] - C.KEPT[0]) * i) / 48; return iso(polar3(C.RI - 0.1, t, z1), P); });
+    const top = pathOf([iso([0, 0, z1], P), ...rim], true);
+    const face = (t) => pathOf([[0.3, z0], [C.RI - 0.1, z0], [C.RI - 0.1, z1], [0.3, z1]].map(([r, z]) => iso(polar3(r, t, z), P)), true);
+    let dots = "";
+    for (const d of foamDots) { const p = iso(polar3(d.r, C.CUT[d.face], z0 + 0.3 + d.z * (h - 0.6)), P); dots += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + Math.min(d.s, h * 0.3).toFixed(2) + '"/>'; }
+    parts.foam.innerHTML = '<path class="cstr-foam" data-face="top" d="' + top + '"/><path class="cstr-foam" d="' + face(C.CUT[0]) + face(C.CUT[1]) + '"/><path class="iso-line" data-tone="lo" d="' + top + face(C.CUT[0]) + face(C.CUT[1]) + '"/><g class="cstr-foam-dots">' + dots + "</g>";
   }
   function drawLevel(el, B, ml) {
     const h = clamp(ml / area(B.r) / 3, 0.3, B.top - 0.3);
@@ -574,6 +597,10 @@ function labLive(C, root, clock) {
     if (sim.eff > 230) sim.eff = 20;          // the effluent is taken for analysis
     sim.mixing = clock.mixerMode === "on" || (clock.mixerMode === "auto" && clock.hour % 1 < 0.25);
     sim.strat = clamp(sim.strat + dtH * (sim.mixing ? -1.6 : 0.12), 0, 1);
+    // Foam builds when the gas comes much faster than at the design point, and the stirrer knocks it down a little.
+    // A picture of overloading, not part of the model: the kinetics do not know about foam.
+    const foamTo = clamp((gasRate / designGas - 1.3) / 1.2, 0, 1) * (sim.mixing ? 0.8 : 1);
+    sim.foam += (foamTo - sim.foam) * (1 - Math.exp(-dtH / 1.5));
     // Gas: through the meter into the bag; a full bag is taken away for analysis.
     const dGas = (ch4 / FEED.ch4InBiogas) * LAB_VOLUME * 1e6;
     sim.gas += dGas; sim.bag += dGas;
@@ -588,6 +615,11 @@ function labLive(C, root, clock) {
     drawBag();
     drawLevel(parts.feedLevel, C.feedBottle, sim.feed);
     drawLevel(parts.effLevel, C.effBottle, sim.eff);
+    drawFoam();
+    // Colour: the liquid and the effluent darken with the degradable solids left in them; the feed is raw manure.
+    paintSlurry(parts.liquid, proc.S);
+    paintSlurry(parts.effLevel, proc.S);
+    paintSlurry(parts.feedLevel, plant.ts * FEED.vsOfTs * 1000);
     parts.scum.forEach((el) => (el.style.opacity = (0.15 + 0.85 * sim.strat).toFixed(3)));
     parts.sediment.forEach((el) => (el.style.opacity = (0.15 + 0.85 * sim.strat).toFixed(3)));
     parts.jacket.forEach((el) => el.classList.toggle("on", sim.heater));
@@ -618,7 +650,7 @@ function labLive(C, root, clock) {
     switch (topic) {
       case "vessel": return [[F.hrt, n0(plant.hrt) + " d"], temp, [F.surface, fmt(surfacePerVolume(LAB.radius, LAB.level), 1) + " m²/m³"]];
       case "jacket": case "circ": return [heat, temp, set];
-      case "slurry": return [temp, S, b, [F.converted, n0((1 - proc.S / s0) * 100) + " %"], [F.olr, fmt(steadyNow.olr, 2) + " kg VS/m³·d"], [F.layers, n0(sim.strat * 100) + " %"]];
+      case "slurry": return [temp, S, b, [F.converted, n0((1 - proc.S / s0) * 100) + " %"], [F.olr, fmt(steadyNow.olr, 2) + " kg VS/m³·d"], [F.foam, sim.foam < 0.04 ? F.none : fmt(sim.foam * 21, 0) + " mm"], [F.layers, n0(sim.strat * 100) + " %"]];
       case "impeller": case "motor": return [[F.state, onOff(sim.mixing)], [F.mode, U[clock.mixerMode]], [F.layers, n0(sim.strat * 100) + " %"]];
       case "lid": case "gasport": case "gastube": return [gas];
       case "feedport": case "tubing": return [pump, [F.pulseVol, n0(pulseMl) + " mL"]];

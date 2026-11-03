@@ -361,7 +361,8 @@ function explorer(name) {
     // Hovering the list only lights the part, so the card above it never moves the list under the pointer.
     c.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") light(c.dataset.chip); });
     c.addEventListener("pointerleave", () => light(pinned));
-    c.addEventListener("focus", () => show(c.dataset.chip));
+    // Keyboard focus opens the card; a mouse press only lights the part, or the list would move between press and release.
+    c.addEventListener("focus", () => (c.matches(":focus-visible") ? show(c.dataset.chip) : light(c.dataset.chip)));
     c.addEventListener("blur", () => show(pinned));
   });
   root.addEventListener("keydown", (e) => { if (e.key === "Escape" && pinned) { pin(null); e.preventDefault(); } });

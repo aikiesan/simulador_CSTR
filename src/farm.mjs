@@ -428,6 +428,7 @@ function farmLive(C, root, clock) {
   const STORE_M3 = (VMAX - VMIN) / 1000;
   const PUMP_M3H = 10;   // feed pump rate
   const PULSES = 8;      // feeds a day
+  const slurryEl = root.querySelector('[data-topic="slurry"]');
   const sim = { fill: 0.45, chp: false, flaring: 0, temp: DESIGN.temperature, heater: false, mixing: false, feeding: false, strat: 0.4, prop: 0, fan: 0, extra: 0 };
   let plant = { ...DESIGN }, steadyNow = steady(plant), gasRate = steadyNow.biogas / 24;
   const proc = contentsAt(DESIGN);
@@ -536,6 +537,7 @@ function farmLive(C, root, clock) {
     drawMembrane(sim.fill);
     drawProp(sim.prop);
     drawBubbles(dtH);
+    paintSlurry(slurryEl, proc.S);
     drawFans();
     drawExhaust(dtH);
     drawFlame(wall);

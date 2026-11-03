@@ -147,8 +147,8 @@ const T = {
       "Reactor liquid", "Líquido do reator",
       "Inoculum from a running digester, fed with diluted dairy manure. Two things in it decide everything: the degradable solids still left (S) and the active microbes that eat them (b). Both are drawn on the run charts below.",
       "Inóculo de um digestor em operação, alimentado com esterco leiteiro diluído. Duas coisas nele decidem tudo: os sólidos degradáveis que restam (S) e os microrganismos ativos que os consomem (b). As duas aparecem nos gráficos da corrida, abaixo.",
-      "Each feed raises S for a while and the gas rate jumps; then the microbes bring S back down. Start a run from little inoculum to watch b grow.",
-      "Cada alimentação eleva S por um tempo e a vazão de gás salta; depois os microrganismos baixam S de novo. Comece uma corrida com pouco inóculo para ver b crescer.",
+      "The colour follows S: dark while much VS is left (at start-up, in a washout), light when the reactor digests well; the feed bottle shows raw manure, the effluent bottle the reactor liquid. When the gas comes much faster than at the design point (short HRT, overload), foam rises. Start a run from little inoculum to watch b grow and the liquid clear.",
+      "A cor segue S: escura quando há muito SV por degradar (na partida, numa lavagem), clara quando o reator digere bem; a garrafa de alimentação mostra o esterco cru, a de efluente o líquido do reator. Quando o gás vem bem mais rápido que no ponto de projeto (TRH curto, sobrecarga), sobe espuma. Comece uma corrida com pouco inóculo para ver b crescer e o líquido clarear.",
       [["Volume", "Volume", "5.0 L", "5,0 L"], ["Feed solids", "Sólidos na alimentação", "set in the panel", "ajustados no painel"]],
     ],
     impeller: [
